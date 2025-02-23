@@ -1,7 +1,5 @@
 import os
-import subprocess
-from semgrep import clone_github_repo
-import tempfile
+from semgrep import clone_github_repo, run_semrep
 
 def main():
     home_dir = "/home/kun"
@@ -10,3 +8,4 @@ def main():
     local_path = os.path.join(home_dir, repo_name)
     clone_github_repo(github_url, local_path)
     print(f"Repository cloned to {local_path}")
+    run_semrep(local_path)
