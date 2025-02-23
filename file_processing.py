@@ -41,11 +41,7 @@ def load_and_index_files(repo_path):
     for ext in extensions:
         glob_pattern = f'**/*.{ext}'
         try:
-            loader = None
-            if ext == 'ipynb':
-                loader = NotebookLoader(str(repo_path), include_outputs=True, max_output_length=20, remove_newline=True)
-            else:
-                loader = DirectoryLoader(repo_path, glob=glob_pattern)
+            loader = DirectoryLoader(repo_path, glob=glob_pattern)
 
             loaded_documents = loader.load() if callable(loader.load) else []
             if loaded_documents:
