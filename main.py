@@ -14,5 +14,8 @@ def main():
             if index is None:
                 print("No documents were found to index. Existing !!!")
                 exit()
+            
+            clone_github_repo(github_url, local_path)
 
         print("Repository close. Indexing files !!!")
+        exit()
