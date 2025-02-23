@@ -1,6 +1,7 @@
 import os 
 import tempfile
 from file_processing import clone_github_repo
+from file_processing import load_and_index_files
 
 
 def main():
@@ -9,6 +10,9 @@ def main():
     print("Clone repo...")
     with tempfile.TemporaryDirectory() as local_path:
         if clone_github_repo(github_url, local_path):
-            return True
-        else:
-            return False 
+            index, documents, file_type_count, filenames = load_and_index_files(local_path)
+            if index is None:
+                print("No documents were found to index. Existing !!!")
+                exit()
+
+        print("Repository close. Indexing files !!!")
