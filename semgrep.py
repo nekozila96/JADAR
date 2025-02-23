@@ -13,7 +13,7 @@ def clone_github_repo(github_url, local_path):
 def run_semrep(local_path):
     try:
         os.chdir(local_path)
-        subprocess.run(['semgrep', "ci", "--text", "--text-ouput = result.txt"], check = True)
+        subprocess.run(['semgrep', "ci", "--text", "--text-output = result.txt"], check = True)
         print(f"Semgrep scan complete. Results saved to {local_path}/result.txt")
         return True 
     except Exception as e:
