@@ -1,12 +1,12 @@
 import os
-from google import genai 
+import google.generativeai as genai 
 from semgrep import clone_github_repo, run_semrep
 from model import get_embedding, create_embedding, search_code, load_code
 from dotenv import load_dotenv
 
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=GEMINI_API_KEY)
+
 
 def main():
     #Step 1: Clone and scan the Github repository
@@ -28,7 +28,7 @@ def main():
     while True:
         index, code_files = create_embedding(code_data)
 
-        generation_model = genai.GenerativeModel("gemini-2.0-flash")
+        generation_model = genai.GenerativeModel("gemini-2.0-flash",api_key=GEMINI_API_KEY)
 
         template = """
         1. Scan entire the repo - How the code is structured and how it's worked 
