@@ -7,12 +7,12 @@ def main():
     repo_name = repo_url.split("/")[-1]
     if clone_github_repo(repo_url, repo_name):
         local_path = os.path.join(os.getcwd(), repo_name) # Tạo đường dẫn đầy đủ
-        if run_semgrep(local_path):
+        if run_semgrep(local_path,repo_name):
             print("Semgrep scan completed successfully.")
         else:
-            print.error("Semgrep scan failed.")
+            print("Semgrep scan failed.")
     else:
-        print.error("Repository cloning failed.")
+        print("Repository cloning failed.")
 
 
 
