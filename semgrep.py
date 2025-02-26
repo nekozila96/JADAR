@@ -7,7 +7,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-def run_semrep(local_path: str, repo_name: str) -> bool:
+def run_semgrep(local_path: str, repo_name: str) -> bool:
     if not isinstance(local_path, str):
         logging.error("Invalid input: local_path must be a string.")
         return False
