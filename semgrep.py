@@ -1,23 +1,37 @@
-import os
+import os 
 import subprocess
+import logging
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
-def clone_github_repo(github_url, local_path):
-    try: 
-        subprocess.run(['git', 'clone', github_url, local_path],check = True)
+def run_semrep(local_path: str, repo_name: str) -> bool:
+    if not isinstance(local_path, str):
+        logging.error("Invalid input: local_path must be a string.")
+        return False
+
+    if not os.path.exists(local_path) or not os.path.isdir(local_path):
+        logging.error(f"Invalid local path: {local_path} does not exist or is not a directory.")
+        return False
+
+    try:
+        print(f"Running Semgrep scan in {local_path}")
+        orginal_pwd = os.getcwd()
+        os.chdir(local_path)
+        result_file = f"{repo_name}.txt"
+        subprocess.run(['semgrep', "ci", "--text", f"--textoutput={result_file}"])
+        print(F"Semgrep scan complete. Results saved to {local_path}/{result_file}")
         return True
     except Exception as e:
-        print(f"Failed to clone repository: {e}")
+        print(f"An unexpected error occured during Semgrep scan: {e}")
+        logging.error(f"An unexpected error occured during Semgrep scan: {e}")
+        return False
+    except subprocess.CalledProcessError as e:
+        print(f"Semgrep scan failed with error: {e.stderr}")
+        logging.error(f"Semgrep scan failed with error: {e.stderr}")
         return False
     
-def run_semrep(local_path):
-    try:
-        os.chdir(local_path)
-        result_file = result.txt
-        subprocess.run(['semgrep', "ci", "--text", "--text-output=result"], check = True)
-        
-        print(f"Semgrep scan complete. Results saved to {local_path}/result.txt")
-        return True 
-    except Exception as e:
-        print(f"Failed to run Semgrep: {e}")
-        return False
+
+
