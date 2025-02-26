@@ -18,7 +18,6 @@ def run_semrep(local_path: str, repo_name: str) -> bool:
 
     try:
         print(f"Running Semgrep scan in {local_path}")
-        orginal_pwd = os.getcwd()
         os.chdir(local_path)
         result_file = f"{repo_name}.txt"
         subprocess.run(['semgrep', "ci", "--text", f"--textoutput={result_file}"])
