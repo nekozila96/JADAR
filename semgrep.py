@@ -21,8 +21,8 @@ def run_semgrep(local_path: str, repo_name: str) -> bool:
     try:
         print(f"Running Semgrep scan in {local_path}")
         os.chdir(local_path)
-        result_file = f"{repo_name}.txt"
-        subprocess.run(['semgrep', "ci", "--text", f"--text-output={result_file}"])
+        result_file = f"{repo_name}.json"
+        subprocess.run(['semgrep', "ci", "--json", f"--text-output={result_file}"])
         print(F"Semgrep scan complete. Results saved to {local_path}/{result_file}")
         return True
     except Exception as e:
