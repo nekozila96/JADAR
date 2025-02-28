@@ -1,5 +1,5 @@
 import os 
-from semgrep import run_semgrep
+from semgrep import run_semgrep, analysis_semgrep
 from github import clone_github_repo
 
 def main():
@@ -14,7 +14,13 @@ def main():
     else:
         print("Repository cloning failed.")
 
+    filename = f"{repo_name}.json"
+    output_filename = f"{repo_name}_output.json"
+    analysis_semgrep(filename, output_filename)   
 
 
+
+
+    
 if __name__ == "__main__":
     main()
