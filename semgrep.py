@@ -77,9 +77,6 @@ def analysis_semgrep(input_filename, output_filename):
         check_id = result.get("check_id")
         file_path = result.get("path")
         start_line = result.get("start", {}).get("line")  # Nested access with .get()
-        start_col = result.get("start", {}).get("col")
-        end_line = result.get("end", {}).get("line")
-        end_col = result.get("end", {}).get("col")
         message = result.get("extra", {}).get("message")
         severity = severity_to_numeric(result.get("extra", {}).get("severity"))
         lines = result.get("extra", {}).get("lines")
@@ -113,9 +110,6 @@ def analysis_semgrep(input_filename, output_filename):
             "impact": impact,
             "confidence": confidence,
             "start_line": start_line,
-            "start_col": start_col,
-            "end_line": end_line,
-            "end_col": end_col,
             "message": message,
             "lines": lines,
             "cwe": cwe,
