@@ -34,6 +34,22 @@ def run_semgrep(local_path: str, repo_name: str) -> bool:
         logging.error(f"Semgrep scan failed with error: {e.stderr}")
         return False
     
+def severity_to_numeric(severity):
+    severity_map = {"CRITICAL": 4, "ERROR": 3, "WARNING": 2, "INFO": 1}
+    return severity_map.get(severity, 0)
+
+def likelihood_to_numeric(likelihood):
+    likelihood_map = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
+    return likelihood_map.get(likelihood, 0)
+
+def impact_to_numeric(impact):
+    impact_map = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
+    return impact_map.get(impact, 0)
+
+def confidence_to_numeric(confidence):
+    confidence_map = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
+    return confidence_map.get(confidence, 0)
+    
 
 def analysis_semgrep(input_filename, output_filename):
     try:
@@ -65,37 +81,53 @@ def analysis_semgrep(input_filename, output_filename):
         end_line = result.get("end", {}).get("line")
         end_col = result.get("end", {}).get("col")
         message = result.get("extra", {}).get("message")
-        severity = result.get("extra", {}).get("severity")
+        severity = severity_to_numeric(result.get("extra", {}).get("severity"))
         lines = result.get("extra", {}).get("lines")
 
         # Handle CWE, OWASP and references
         cwe = None
         owasp = None
+        likelihood = None
+        impact = None
+        confidence = None
 
         if "extra" in result and isinstance(result["extra"], dict):
             metadata = result["extra"].get("metadata")
             if metadata:
                 cwe = metadata.get("cwe")
                 owasp = metadata.get("owasp")
+                likelihood = likelihood_to_numeric(metadata.get("likelihood"))
+                impact = impact_to_numeric(metadata.get("impact"))
+                confidence = confidence_to_numeric(metadata.get("confidence"))
+            
+        def compare_findings(finding):
+            return(-severity , -likelihood , -impact , -confidence)
+    
 
         # Create a dictionary for the current finding
         finding_info = {
             "check_id": check_id,
             "file_path": file_path,
+            "severity": severity,
+            "likelihood": likelihood,
+            "impact": impact,
+            "confidence": confidence,
             "start_line": start_line,
             "start_col": start_col,
             "end_line": end_line,
             "end_col": end_col,
             "message": message,
-            "severity": severity,
             "lines": lines,
             "cwe": cwe,
             "owasp": owasp,
         }
-        important_findings.append(finding_info)
+        
+    important_findings.append(finding_info)
 
-        with open(output_filename, 'w', encoding='utf-8') as f:
-            json.dump(important_findings, f, indent=4)
+    result_findings = sorted(important_findings, key=compare_findings)
+
+    with open(output_filename, 'w', encoding='utf-8') as f:
+        json.dump(result_findings, f, indent=4)
 
 
 
