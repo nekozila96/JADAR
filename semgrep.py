@@ -35,52 +35,45 @@ def run_semgrep(local_path: str, repo_name: str) -> bool:
         return False
     
 def severity_to_numeric(severity):
-
-    if severity == "CRITICAL":
-        return 4
-    elif severity == "WARNING":
-         return 3
-    elif severity == "ERROR":
-        return 2
-    elif severity == "INFO":
-        return 1
-    else:
-        return 0
-
-
+    mapping = {
+        "CRITICAL": 4,
+        "ERROR": 3,
+        "WARNING": 2,
+        "INFO": 1
+    }
+    return mapping.get(severity, 0)
 
 def likelihood_to_numeric(likelihood):
-    if likelihood == "HIGH":
-        return 3
-    elif likelihood == "MEDIUM":
-        return 2
-    elif likelihood == "LOW":
-        return 1
-    else:
-        return 0
+    mapping = {
+        "HIGH": 3,
+        "MEDIUM": 2,
+        "LOW": 1
+    }
+    return mapping.get(likelihood, 0)
 
 def impact_to_numeric(impact):
-    if impact == "HIGH":
-        return 3
-    elif impact == "MEDIUM":
-        return 2
-    elif impact == "LOW":
-        return 1
-    else:
-        return 0
-
+    mapping = {
+        "HIGH": 3,
+        "MEDIUM": 2,
+        "LOW": 1
+    }
+    return mapping.get(impact, 0)
 
 def confidence_to_numeric(confidence):
-    if confidence == "HIGH":
-        return 3
-    elif confidence == "MEDIUM":
-        return 2
-    elif confidence == "LOW":
-        return 1
-    else:
-        return 0
+    mapping = {
+        "HIGH": 3,
+        "MEDIUM": 2,
+        "LOW": 1
+    }
+    return mapping.get(confidence, 0)
 
-    
+def sort_findings(findings):
+    return sorted(findings, key=lambda x: (
+        -severity_to_numeric(x.get('severity', '')),
+        -likelihood_to_numeric(x.get('likelihood', '')),
+        -impact_to_numeric(x.get('impact', '')),
+        -confidence_to_numeric(x.get('confidence', ''))
+    ))
 
 def analysis_semgrep(input_filename, output_filename):
     try:
@@ -94,7 +87,7 @@ def analysis_semgrep(input_filename, output_filename):
         return []  # Return an empty list if the JSON is invalid
 
     if not isinstance(data, dict) or "results" not in data or not isinstance(data["results"], list):
-        print(f"Error: Unexpected JSON structure in file {input_filename}.  Expected a dictionary with a 'results' list.")
+        print(f"Error: Unexpected JSON structure in file {input_filename}. Expected a dictionary with a 'results' list.")
         return []
 
     important_findings = []
@@ -109,8 +102,15 @@ def analysis_semgrep(input_filename, output_filename):
         file_path = result.get("path")
         start_line = result.get("start", {}).get("line")  # Nested access with .get()
         message = result.get("extra", {}).get("message")
-        severity = severity_to_numeric(result.get("extra", {}).get("severity"))
+        severity = result.get("extra", {}).get("severity")
         lines = result.get("extra", {}).get("lines")
+
+        # Handle metavars and service name
+        service_name = None
+        if "extra" in result and isinstance(result["extra"], dict):
+            metavars = result["extra"].get("metavars")
+            if metavars and "$SERVICE" in metavars:
+                service_name = metavars["$SERVICE"].get("abstract_content")
 
         # Handle CWE, OWASP and references
         cwe = None
@@ -124,13 +124,9 @@ def analysis_semgrep(input_filename, output_filename):
             if metadata:
                 cwe = metadata.get("cwe")
                 owasp = metadata.get("owasp")
-                likelihood = likelihood_to_numeric(metadata.get("likelihood"))
-                impact = impact_to_numeric(metadata.get("impact"))
-                confidence = confidence_to_numeric(metadata.get("confidence"))
-            
-        def compare_findings(finding):
-            return(-severity , -likelihood , -impact , -confidence)
-    
+                likelihood = metadata.get("likelihood")
+                impact = metadata.get("impact")
+                confidence = metadata.get("confidence")
 
         # Create a dictionary for the current finding
         finding_info = {
@@ -146,13 +142,13 @@ def analysis_semgrep(input_filename, output_filename):
             "cwe": cwe,
             "owasp": owasp,
         }
-        
-    important_findings.append(finding_info)
+        important_findings.append(finding_info)
 
-    result_findings = sorted(important_findings, key=compare_findings)
+    # Sort the findings before writing to the output file
+    sorted_findings = sort_findings(important_findings)
 
     with open(output_filename, 'w', encoding='utf-8') as f:
-        json.dump(result_findings, f, indent=4)
+        json.dump(sorted_findings, f, indent=4)
 
 
 
