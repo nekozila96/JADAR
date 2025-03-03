@@ -22,7 +22,7 @@ def run_semgrep(local_path: str, repo_name: str) -> bool:
         print(f"Running Semgrep scan in {local_path}")
         os.chdir(local_path)
         result_file = f"{repo_name}.json"
-        subprocess.run(['semgrep', "ci", "--json", f"--text-output={result_file}"])
+        subprocess.run(['semgrep', "ci", "--json", f"--json-output={result_file}"])
         print(F"Semgrep scan complete. Results saved to {local_path}/{result_file}")
         return True
     except Exception as e:
@@ -35,20 +35,51 @@ def run_semgrep(local_path: str, repo_name: str) -> bool:
         return False
     
 def severity_to_numeric(severity):
-    severity_map = {"CRITICAL": 4, "ERROR": 3, "WARNING": 2, "INFO": 1}
-    return severity_map.get(severity, 0)
+
+    if severity == "CRITICAL":
+        return 4
+    elif severity == "WARNING":
+         return 3
+    elif severity == "ERROR":
+        return 2
+    elif severity == "INFO":
+        return 1
+    else:
+        return 0
+
+
 
 def likelihood_to_numeric(likelihood):
-    likelihood_map = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
-    return likelihood_map.get(likelihood, 0)
+    if likelihood == "HIGH":
+        return 3
+    elif likelihood == "MEDIUM":
+        return 2
+    elif likelihood == "LOW":
+        return 1
+    else:
+        return 0
 
 def impact_to_numeric(impact):
-    impact_map = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
-    return impact_map.get(impact, 0)
+    if impact == "HIGH":
+        return 3
+    elif impact == "MEDIUM":
+        return 2
+    elif impact == "LOW":
+        return 1
+    else:
+        return 0
+
 
 def confidence_to_numeric(confidence):
-    confidence_map = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
-    return confidence_map.get(confidence, 0)
+    if confidence == "HIGH":
+        return 3
+    elif confidence == "MEDIUM":
+        return 2
+    elif confidence == "LOW":
+        return 1
+    else:
+        return 0
+
     
 
 def analysis_semgrep(input_filename, output_filename):
