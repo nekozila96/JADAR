@@ -18,9 +18,18 @@ def main():
     output_filename = f"{repo_name}_output.json"
     analysis_semgrep(filename, output_filename)   
 
+    vulnerabilities = load_vulnerabilities(output_filename)
+    report = []
+    prompt = create_vulnerability_prompt()
+
+    for index, (vulnerability, prompt) in enumerate(zip(vulnerabilities, prompt)):
+        
+        # Gọi hàm phân tích lỗ hổng
+        analyze_vulnerability(vulnerability, prompt, report)
+        # Ghi kết quả ra file ngay sau khi phân tích mỗi lỗ hổng
+        with open("vulnerability_analysis.json", "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=4)
 
 
-
-    
 if __name__ == "__main__":
     main()
