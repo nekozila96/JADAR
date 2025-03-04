@@ -3,7 +3,6 @@ from semgrep import run_semgrep, analysis_semgrep
 from github import clone_github_repo
 
 def main():
-    """
     repo_url = input("Please input the URL of Repository you want to test: ")
     repo_name = repo_url.split("/")[-1]
     if clone_github_repo(repo_url, repo_name):
@@ -14,9 +13,9 @@ def main():
             print("Semgrep scan failed.")
     else:
         print("Repository cloning failed.")
-    """
-    filename = f"semgrep.json"
-    output_filename = f"output.json"
+
+    filename = f"{repo_name}.json"
+    output_filename = f"{repo_name}_output.json"
     analysis_semgrep(filename, output_filename)   
 
 

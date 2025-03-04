@@ -73,6 +73,7 @@ def analysis_semgrep(input_filename, output_filename):
         return []
 
     important_findings = []
+    index = 0
 
     for result in data["results"]:  # Iterate through the list of results
         if not isinstance(result, dict):
