@@ -5,7 +5,6 @@ import google.generativeai as genai
 from prompt import load_vulnerabilities, create_vulnerability_prompt
 from typing import Dict, Any, List, Optional
 
-
 load_dotenv()
 
 API_KEY = os.getenv("GEMINI_API_KEY")
