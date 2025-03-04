@@ -100,10 +100,8 @@ def analysis_semgrep(input_filename, output_filename):
                 owasp = metadata.get("owasp")
                 confidence = metadata.get("confidence")
 
-        if severity == "INFO" and confidence == "LOW" or severity == "INFO" and confidence == "MEDIUM":
+        if severity == "INFO" and confidence == "LOW" or severity == "INFO" and confidence == "MEDIUM" or severity == "WARNING" and confidence == "LOW":
             continue
-
-        
 
         # Create a dictionary for the current finding
         finding_info = {
