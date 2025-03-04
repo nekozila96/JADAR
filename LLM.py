@@ -5,7 +5,8 @@ import google.generativeai as genai
 from prompt import load_vulnerabilities, create_vulnerability_prompt
 from typing import Dict, Any, List, Optional
 
-dotenv.load_dotenv()
+
+load_dotenv()
 
 API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.0-flash")
