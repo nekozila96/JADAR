@@ -43,22 +43,6 @@ def severity_to_numeric(severity):
     }
     return mapping.get(severity, 0)
 
-def likelihood_to_numeric(likelihood):
-    mapping = {
-        "HIGH": 3,
-        "MEDIUM": 2,
-        "LOW": 1
-    }
-    return mapping.get(likelihood, 0)
-
-def impact_to_numeric(impact):
-    mapping = {
-        "HIGH": 3,
-        "MEDIUM": 2,
-        "LOW": 1
-    }
-    return mapping.get(impact, 0)
-
 def confidence_to_numeric(confidence):
     mapping = {
         "HIGH": 3,
@@ -70,8 +54,6 @@ def confidence_to_numeric(confidence):
 def sort_findings(findings):
     return sorted(findings, key=lambda x: (
         -severity_to_numeric(x.get('severity', '')),
-        -likelihood_to_numeric(x.get('likelihood', '')),
-        -impact_to_numeric(x.get('impact', '')),
         -confidence_to_numeric(x.get('confidence', ''))
     ))
 
@@ -105,18 +87,10 @@ def analysis_semgrep(input_filename, output_filename):
         severity = result.get("extra", {}).get("severity")
         lines = result.get("extra", {}).get("lines")
 
-        # Handle metavars and service name
-        service_name = None
-        if "extra" in result and isinstance(result["extra"], dict):
-            metavars = result["extra"].get("metavars")
-            if metavars and "$SERVICE" in metavars:
-                service_name = metavars["$SERVICE"].get("abstract_content")
 
         # Handle CWE, OWASP and references
         cwe = None
         owasp = None
-        likelihood = None
-        impact = None
         confidence = None
 
         if "extra" in result and isinstance(result["extra"], dict):
@@ -124,17 +98,19 @@ def analysis_semgrep(input_filename, output_filename):
             if metadata:
                 cwe = metadata.get("cwe")
                 owasp = metadata.get("owasp")
-                likelihood = metadata.get("likelihood")
-                impact = metadata.get("impact")
                 confidence = metadata.get("confidence")
+
+        if severity == "INFO" and confidence == "LOW" or severity == "INFO" and confidence == "MEDIUM":
+            continue
+
+        
 
         # Create a dictionary for the current finding
         finding_info = {
+            "index": index,
             "check_id": check_id,
             "file_path": file_path,
             "severity": severity,
-            "likelihood": likelihood,
-            "impact": impact,
             "confidence": confidence,
             "start_line": start_line,
             "message": message,
@@ -146,6 +122,9 @@ def analysis_semgrep(input_filename, output_filename):
 
     # Sort the findings before writing to the output file
     sorted_findings = sort_findings(important_findings)
+
+    for index, finding in enumerate(sorted_findings, start=1):
+        finding['index'] = index
 
     with open(output_filename, 'w', encoding='utf-8') as f:
         json.dump(sorted_findings, f, indent=4)
