@@ -31,7 +31,7 @@ def main():
             print("Semgrep scan failed.")
         return
     elif clone_github_repo(repo_url, repo_name):
-        if run_semgrep(local_path):
+        if run_semgrep(local_path,repo_name):
             print("Semgrep scan completed successfully.")
             analysis_semgrep(filename, output_filename)
         else:
