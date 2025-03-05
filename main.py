@@ -27,7 +27,7 @@ def main():
     elif os.path.exists(local_path):
         os.chdir(local_path)
         logging.info(f"Directory f{local_path} already exists. Running Semgrep only.")
-        if run_semgrep(local_path):
+        if run_semgrep(local_path,repo_name):
             print("Semgrep scan completed successfully.")
             analysis_semgrep(filename, output_filename) 
         else:
