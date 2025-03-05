@@ -40,7 +40,7 @@ def main():
         print("Repository cloning failed.")
 
       
-    
+    """
     vulnerabilities = load_vulnerabilities(output_filename)
     report = []
     prompt = create_vulnerability_prompt()
@@ -52,6 +52,7 @@ def main():
         # Ghi kết quả ra file ngay sau khi phân tích mỗi lỗ hổng
         with open("vulnerability_analysis.json", "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False, indent=4)
+    """
     
 if __name__ == "__main__":
     main()
