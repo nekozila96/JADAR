@@ -14,15 +14,18 @@ def main():
     output_filename = f"{repo_name}_output.json"
 
     if os.path.exists(output_filename):
+        os.chdir(local_path)
         logging.info(f"Repository, Semgrep results, and analysis found at f{local_path}. Skipping all processes.")
         print("Cloning, scanning, and analysis skipped as results already exist.")
         return
-    elif os.path.exists(local_path):
+    elif os.path.exists(local_path) and os.path.exists(filename):
+        os.chdir(local_path)
         logging.info(f"Repository and Semgrep results found at f{local_path}. Skipping cloning and scanning.")
         print("Semgrep scan and cloning skipped.")
         analysis_semgrep(filename, output_filename) 
         return
     elif os.path.exists(local_path):
+        os.chdir(local_path)
         logging.info(f"Directory f{local_path} already exists. Running Semgrep only.")
         if run_semgrep(local_path):
             print("Semgrep scan completed successfully.")
