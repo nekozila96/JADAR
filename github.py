@@ -17,7 +17,6 @@ def clone_github_repo(github_url: str, local_path: str) -> bool:
 
     if os.path.exists(local_path):
         logging.error(f"Local path '{local_path}' already exists.")
-        sys.exit(1)
         return False
 
     try:
