@@ -1,13 +1,11 @@
 import os 
 import json
 from semgrep import run_semgrep, analysis_semgrep
-from prompt import load_vulnerabilities, create_vulnerability_prompt
-from LLM import analyze_vulnerability
 from github import clone_github_repo
-from prompt import *
+from prompt import Vulnerability, JavaVulnerabilityExtractor
 import logging
 import asyncio
-
+from dataclasses import asdict
 
 
 async def main():
