@@ -44,9 +44,19 @@ async def main():
     else:
         print("Repository cloning failed.")
 
+    try:
+        with open(output_filename, "r", encoding="utf-8") as f:
+            json_reports = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: Semgrep output file not found: {output_filename}")
+        return
+    except json.JSONDecodeError:
+        print(f"Error: Invalid JSON in Semgrep output file: {output_filename}")
+        return
+
 
     extractor = JavaVulnerabilityExtractor(local_path)
-    results = await extractor.analyze_vulnerabilities(output_filename)
+    results = await extractor.analyze_vulnerabilities(json_reports)
 
     def create_prompt(vulnerability: Vulnerability) -> str:
         """Tạo prompt từ thông tin lỗ hổng."""
@@ -81,5 +91,7 @@ async def main():
             prompt = create_prompt(result)  # Tạo prompt
             print("Prompt:\n", prompt)       # In prompt
     
+    
+
 if __name__ == "__main__":
     asyncio.run(main())

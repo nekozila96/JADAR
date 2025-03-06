@@ -129,4 +129,3 @@ def analysis_semgrep(input_filename, output_filename):
         json.dump(sorted_findings, f, indent=4)
 
 
-
