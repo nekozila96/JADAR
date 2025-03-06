@@ -4,9 +4,13 @@ from semgrep import run_semgrep, analysis_semgrep
 from prompt import load_vulnerabilities, create_vulnerability_prompt
 from LLM import analyze_vulnerability
 from github import clone_github_repo
+from prompt import *
 import logging
+import asyncio
 
-def main():
+
+
+async def main():
     repo_url = input("Please input the URL of Repository you want to test: ")
     repo_name = repo_url.split("/")[-1]
     local_path = os.path.join(os.getcwd(), repo_name)
@@ -42,20 +46,42 @@ def main():
     else:
         print("Repository cloning failed.")
 
-      
-    """
-    vulnerabilities = load_vulnerabilities(output_filename)
-    report = []
-    prompt = create_vulnerability_prompt()
 
-    for index, (vulnerability, prompt) in enumerate(zip(vulnerabilities, prompt)):
-        
-        # Gọi hàm phân tích lỗ hổng
-        analyze_vulnerability(vulnerability, prompt, report)
-        # Ghi kết quả ra file ngay sau khi phân tích mỗi lỗ hổng
-        with open("vulnerability_analysis.json", "w", encoding="utf-8") as f:
-            json.dump(report, f, ensure_ascii=False, indent=4)
+    extractor = JavaVulnerabilityExtractor(local_path)
+    results = await extractor.analyze_vulnerabilities(output_filename)
+
+    def create_prompt(vulnerability: Vulnerability) -> str:
+        """Tạo prompt từ thông tin lỗ hổng."""
+        return f"""
+    Phát hiện lỗ hổng bảo mật:
+    File: {vulnerability.file}
+    Hàm: {vulnerability.function_name}
+    Code của hàm:
+    {vulnerability.function_code}
+    Dòng: {vulnerability.line}
+    Severity: {vulnerability.severity}
+    Confidence: {vulnerability.confidence}
+    Source: {', '.join(vulnerability.source)}
+    Sink: {vulnerability.sink}
+    Mô tả: {vulnerability.message}
+    Check ID: {vulnerability.check_id}
+    Hãy trả lời theo format sau để tôi có thể dễ dàng đưa vào báo cáo:
+    KẾT QUẢ PHÂN TÍCH:
+    Loại lỗi: [True/False] Positive
+    Mức độ nghiêm trọng: [Thấp/Trung bình/Cao/Nghiêm trọng]
+    GIẢI THÍCH NGẮN GỌN:
+    [Liệt kê các lý do xác nhận đây là lỗi thật hoặc lý do đây là false positive]
+    CODE ĐÃ SỬA:
+    [Code đã được sửa]
     """
+      
+    for result in results:
+        print("Vulnerability Report:")
+        for key, value in asdict(result).items():  # In thông tin chi tiết
+            print("-" * 20)
+
+            prompt = create_prompt(result)  # Tạo prompt
+            print("Prompt:\n", prompt)       # In prompt
     
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
