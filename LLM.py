@@ -7,6 +7,8 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 import re
 
+load_dotenv("GEMINI_API_KEY")
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -135,7 +137,6 @@ class GeminiClient(BaseLLM):
         if not self.api_key:
             logger.error("API key not found. Please provide GEMINI_API_KEY in .env file")
             raise LLMAuthError("API key not found in .env file")
-
         self.model = model
         self.api_base = os.getenv("GEMINI_API_BASE", "https://generativelanguage.googleapis.com")
         self.report_manager = ReportManager()
