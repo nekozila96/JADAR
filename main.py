@@ -86,13 +86,14 @@ async def main():
         """
         response = gemini.generate_response(
             max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
             temperature=0.7
         )
         if response["success"]:
             print(response["message"])
         else:
             print(f"❌ Error: {response['error']} (Type: {response.get('error_type', 'Unknown')})")
-        return response
+        return response.choices[0].message.content
       
     for result in results:
         print("Vulnerability Report:")
