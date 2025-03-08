@@ -95,11 +95,21 @@ async def main():
     for result in results:
         print("Vulnerability Report:")
         print("-" * 20)
+        result = llm_client.generate_response(
+            max_tokens=2000,
+            temperature=0.7
+        )
+
+
         prompt = create_prompt(result)
         print("=" * 30)
         print("Prompt:\n", prompt)
         try:
             llm_result = llm_client.generate_response(prompt)  # Gọi LLM
+            llm_result = llm_client.generate_response(
+            max_tokens=2000,
+            temperature=0.7
+            )   
             if llm_result["success"]:
                 llm_response = llm_result["response"]
                 print("LLM Response:\n", llm_response)
