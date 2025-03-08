@@ -95,11 +95,6 @@ async def main():
     for result in results:
         print("Vulnerability Report:")
         print("-" * 20)
-        result = llm_client.generate_response(
-            max_tokens=2000,
-            temperature=0.7
-        )
-
 
         prompt = create_prompt(result)
         print("=" * 30)
