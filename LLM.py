@@ -258,17 +258,6 @@ class GeminiClient(BaseLLM):
             logger.error(f"Error processing response: {str(e)}")
             raise LLMResponseError(f"Failed to process response: {str(e)}")
         
-    def generate_response(self, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
-        """
-        Utility function: Read prompt from file, send prompt, process and save response in one call
-        
-        Args:
-            max_tokens: Maximum tokens for the response
-            temperature: Temperature (creativity) of the response
-            
-        Returns:
-            Dict: Result indicating success or failure
-        """
     def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
         """
         Generates a response for a given prompt (takes prompt directly).
