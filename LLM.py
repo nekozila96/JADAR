@@ -164,11 +164,7 @@ class GeminiClient(BaseLLM):
         """
         # Load environment variables
         load_dotenv()
-<<<<<<< HEAD
         
-=======
-         
->>>>>>> 6962db0fba7b366624e47e35efb34a64f5becd67
         # Check API key
         self.api_key = os.getenv("GEMINI_API_KEY")
         if not self.api_key:
@@ -387,31 +383,3 @@ class GeminiClient(BaseLLM):
                 "error_type": "UnexpectedError"
             }
 
-
-# Example usage
-if __name__ == "__main__":
-    try:
-        # Initialize Gemini client
-        gemini = GeminiClient()
-        
-        # Generate response using prompt from file
-        result = gemini.generate_response(
-            max_tokens=2000,
-            temperature=0.7
-        )
-        
-        if result["success"]:
-            print(result["message"])
-        else:
-            print(f"❌ Error: {result['error']} (Type: {result.get('error_type', 'Unknown')})")
-            
-    except LLMAuthError as e:
-        print(f"❌ Authentication error: {str(e)}")
-    except LLMConnectionError as e:
-        print(f"❌ Connection error: {str(e)}")
-    except LLMFileError as e:
-        print(f"❌ File error: {str(e)}")
-    except LLMError as e:
-        print(f"❌ LLM error: {str(e)}")
-    except Exception as e:
-        print(f"❌ Unexpected error: {str(e)}")

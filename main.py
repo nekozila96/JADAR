@@ -3,9 +3,10 @@ import json
 from semgrep import run_semgrep, analysis_semgrep
 from github import clone_github_repo
 from prompt import Vulnerability, JavaVulnerabilityExtractor
+from LLM import GeminiClient
 import logging
 import asyncio
-from dataclasses import asdict
+
 
 
 async def main():
@@ -58,9 +59,9 @@ async def main():
     extractor = JavaVulnerabilityExtractor(local_path)
     results = await extractor.analyze_vulnerabilities(json_reports)
 
-    def create_prompt(vulnerability: Vulnerability) -> str:
-        """Tạo prompt từ thông tin lỗ hổng."""
-        return f"""
+    async def create_prompt(vulnerability: Vulnerability) -> str:
+        gemini = GeminiClient()
+        prompt = """
     Bạn là một chuyên gia bảo mật Java Web. Dưới đây là thông tin từ Semgrep về một lỗi bảo mật:
     Phát hiện lỗ hổng bảo mật:
     File: {vulnerability.file}
@@ -82,15 +83,25 @@ async def main():
     [Liệt kê các lý do xác nhận đây là lỗi thật hoặc lý do đây là false positive]
     CODE ĐÃ SỬA:
     [Code đã được sửa]
-    """
+        """
+        response = gemini.generate_response(
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7
+        )
+        if response["success"]:
+            print(response["message"])
+        else:
+            print(f"❌ Error: {response['error']} (Type: {response.get('error_type', 'Unknown')})")
+        return response.choices[0].message.content
       
     for result in results:
         print("Vulnerability Report:")
-        for key, value in asdict(result).items():  # In thông tin chi tiết
-            print("-" * 20)
+        print("-" * 20)
 
-            prompt = create_prompt(result)  # Tạo prompt       
-    
+        prompt = create_prompt(result)  # Tạo prompt       
+        analysis = await create_prompt(prompt)
+        print(analysis)
     
 
 if __name__ == "__main__":
