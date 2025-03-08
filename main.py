@@ -6,6 +6,9 @@ from prompt import Vulnerability, JavaVulnerabilityExtractor
 from LLM import *
 import logging
 import asyncio
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def create_prompt(vulnerability: Vulnerability) -> str:
     prompt = """
@@ -95,7 +98,6 @@ async def main():
     for result in results:
         print("Vulnerability Report:")
         print("-" * 20)
-
         prompt = create_prompt(result)
         print("=" * 30)
         print("Prompt:\n", prompt)
