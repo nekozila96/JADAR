@@ -61,6 +61,7 @@ async def main():
     def create_prompt(vulnerability: Vulnerability) -> str:
         """Tạo prompt từ thông tin lỗ hổng."""
         return f"""
+    Bạn là một chuyên gia bảo mật Java Web. Dưới đây là thông tin từ Semgrep về một lỗi bảo mật:
     Phát hiện lỗ hổng bảo mật:
     File: {vulnerability.file}
     Hàm: {vulnerability.function_name}
@@ -88,8 +89,7 @@ async def main():
         for key, value in asdict(result).items():  # In thông tin chi tiết
             print("-" * 20)
 
-            prompt = create_prompt(result)  # Tạo prompt
-            print("Prompt:\n", prompt)       # In prompt
+            prompt = create_prompt(result)  # Tạo prompt       
     
     
 
