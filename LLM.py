@@ -164,7 +164,11 @@ class GeminiClient(BaseLLM):
         """
         # Load environment variables
         load_dotenv()
+<<<<<<< HEAD
         
+=======
+         
+>>>>>>> 6962db0fba7b366624e47e35efb34a64f5becd67
         # Check API key
         self.api_key = os.getenv("GEMINI_API_KEY")
         if not self.api_key:
