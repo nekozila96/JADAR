@@ -55,9 +55,9 @@ async def main():
             vulnerabilities = json.load(f)
 
         for vulnerability in vulnerabilities:
-            prompt = gemini.create_prompt(vulnerability, os.path.join(local_path, filename), local_path)
+            prompt = await gemini.create_prompt(vulnerability, os.path.join(local_path, filename), local_path)
             if prompt:
-                result = await gemini.generate_response(prompt=prompt, max_tokens=2000, temperature=0.7)
+                result = gemini.analyze_vulnerability(prompt=prompt, max_tokens=2000, temperature=0.7)
                 print(f"LLM Response for {vulnerability['file']}: {result}")
             else:
                 print(f"Failed to create prompt for {vulnerability['file']}.")
