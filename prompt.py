@@ -30,6 +30,8 @@ class Vulnerability:
     severity: str
     confidence: str
     check_id: str
+    index: int
+    start_line: int
 
 
 class JavaVulnerabilityExtractor:
@@ -125,8 +127,10 @@ class JavaVulnerabilityExtractor:
         method_code,
     ) -> Optional[Dict[str, Any]]:
         """Extracts vulnerability details from the parsed Java code."""
+        index = report["index"]
         message = report["message"]
         check_id = report["check_id"]
+        start_line = report["start_line"]
         lines_of_code = report["lines"]
         severity = report["severity"]
         confidence = report["confidence"]
@@ -135,9 +139,11 @@ class JavaVulnerabilityExtractor:
         sources = self._identify_sources(tree, method_name)  # Cần cải thiện
         return {
             "file": str(file_path),
+            "index": index,
             "function_name": method_name,  # Tên hàm
             "function_code": method_code,  # Toàn bộ code của hàm
             "line": lines_of_code,
+            "start_line": start_line,
             "severity": severity,
             "confidence": confidence,
             "source": sources,

@@ -60,22 +60,6 @@ async def main():
 
     extractor = JavaVulnerabilityExtractor(local_path)
     results = await extractor.analyze_vulnerabilities(json_reports)
-    def create_prompt(vulnerability: Vulnerability) -> str:
-        """Tạo prompt từ thông tin lỗ hổng."""
-        return f"""
-    Phát hiện lỗ hổng bảo mật:
-    Index: {vulnerability.index}
-    File: {vulnerability.file}
-    Check ID: {vulnerability.check_id}
-    Start line: {vulnerability.start_line}
-    Hàm: {vulnerability.function_name}
-    Code của hàm:
-    {vulnerability.function_code}
-    Dòng: {vulnerability.line}
-    Severity: {vulnerability.severity}
-    Confidence: {vulnerability.confidence}
-    Mô tả: {vulnerability.message}
-    """
 
     try:
         llm_client = GeminiClient()
@@ -89,13 +73,13 @@ async def main():
     for result in results:
         print("Vulnerability Report:")
         print("-" * 20)
-        prompt = create_prompt(result)
+        prompt = llm_client.create_prompt(result)
         print("=" * 30)
         print("Prompt:\n", prompt)
         
-
+        response = await llm_client.analyze_vulnerability(prompt)
+        print("LLM Analysis:\n", response)
         print("=" * 30)
-    
 
 if __name__ == "__main__":
     asyncio.run(main())
