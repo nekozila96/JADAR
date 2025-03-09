@@ -73,14 +73,13 @@ async def main():
     for result in results:
         print("Vulnerability Report:")
         print("-" * 20)
-        for key, value in asdict(result).items():
-            prompt = llm_client.create_prompt(key,value)
-            print("=" * 30)
-            print("Prompt:\n", prompt)
+        prompt = llm_client.create_prompt(result)
+        print("=" * 30)
+        print("Prompt:\n", prompt)
         
-            response = await llm_client.analyze_vulnerability(prompt)
-            print("LLM Analysis:\n", response)
-            print("=" * 30)
+        response = await llm_client.analyze_vulnerability(prompt)
+        print("LLM Analysis:\n", response)
+        print("=" * 30)
 
 
 if __name__ == "__main__":
