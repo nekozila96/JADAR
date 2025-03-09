@@ -49,24 +49,44 @@ async def main():
 
     gemini = GeminiClient()
 
+    def create_prompt(vulnerability: Vulnerability) -> str:
+        """Tạo prompt từ thông tin lỗ hổng."""
+        return f"""
+    Phát hiện lỗ hổng bảo mật:
+    File: {vulnerability.file}
+    Hàm: {vulnerability.function_name}
+    Code của hàm:
+    {vulnerability.function_code}
+    Dòng: {vulnerability.line}
+    Source: {', '.join(vulnerability.source)}
+    Sink: {vulnerability.sink}
+    Mô tả: {vulnerability.message}
+    Check ID: {vulnerability.check_id}
+    """
+
     # Tạo prompt từ kết quả phân tích
     try:
-        with open(os.path.join(local_path, output_filename), "r", encoding="utf-8") as f:
-            vulnerabilities = json.load(f)
-
-        for vulnerability in vulnerabilities:
-            prompt = await gemini.create_prompt(vulnerability, os.path.join(local_path, output_filename), local_path)
-            if prompt:
-                result = gemini.analyze_vulnerability(prompt=prompt, max_tokens=2000, temperature=0.7)
-                print(f"LLM Response for  {result}")
-            else:
-                print("Failed to create prompt")
-
+        with open(output_filename, "r", encoding="utf-8") as f:
+            json_reports = json.load(f)
     except FileNotFoundError:
-        print(f"Error: Analysis output file not found: {output_filename}")
+        print(f"Error: Semgrep output file not found: {output_filename}")
+        return None
     except json.JSONDecodeError:
-        print(f"Error: Invalid JSON in analysis output file: {output_filename}")
+        print(f"Error: Invalid JSON in Semgrep output file: {output_filename}")
+        return None
+    extractor = JavaVulnerabilityExtractor(local_path)
+    results = await extractor.analyze_vulnerabilities(json_reports)
 
+
+    for result in results:
+        prompt = create_prompt(result)
+        if prompt:
+            result = gemini.analyze_vulnerability(prompt=prompt, max_tokens=2000, temperature=0.7)
+            print(f"LLM Response for  {result}")
+        else:
+            print("Failed to create prompt")
+
+    
 
 
 if __name__ == "__main__":
