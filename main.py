@@ -7,6 +7,7 @@ from LLM import *
 import logging
 import asyncio
 from dotenv import load_dotenv
+from dataclasses import asdict
 
 load_dotenv()
 
