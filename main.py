@@ -92,26 +92,7 @@ async def main():
         prompt = create_prompt(result)
         print("=" * 30)
         print("Prompt:\n", prompt)
-        try:  
-            llm_result = llm_client.generate_response(
-            prompt,
-            max_tokens=2000,
-            temperature=0.7
-            )   
-            if llm_result["success"]:
-                llm_response = llm_result["response"]
-                print("LLM Response:\n", llm_response)
-
-                report = ReportManager.generate_report(llm_response)  # Tạo report
-                print("Final Report:\n", report)
-                ReportManager.save_report(report) # Lưu report
-            else:
-                print(f"LLM call failed: {llm_result['error']}")
-
-        except LLMError as e:
-            print(f"LLM Error: {e}")
-        except Exception as e:
-            print(f"Unexpected Error: {e}")
+        
 
         print("=" * 30)
     

@@ -10,6 +10,7 @@ logging.basicConfig(
 )
 
 def run_semgrep(local_path: str, repo_name: str) -> bool:
+    result_file = f"{repo_name}.json" 
     if not isinstance(local_path, str):
         logging.error("Invalid input: local_path must be a string.")
         return False
@@ -17,11 +18,14 @@ def run_semgrep(local_path: str, repo_name: str) -> bool:
     if not os.path.exists(local_path) or not os.path.isdir(local_path):
         logging.error(f"Invalid local path: {local_path} does not exist or is not a directory.")
         return False
+    if os.path.exists(result_file) and os.path.exists(local_path):
+        logging.info(f"Semgrep result file already exists at {result_file}. Skipping Semgrep scan.")
+        print(f"Semgrep result file already exists at {result_file}. Skipping Semgrep scan.") # add print to make it clearer for user.
+        return True
 
     try:
         print(f"Running Semgrep scan in {local_path}")
         os.chdir(local_path)
-        result_file = f"{repo_name}.json"
         subprocess.run(['semgrep', "ci", "--json", f"--json-output={result_file}"])
         print(F"Semgrep scan complete. Results saved to {local_path}/{result_file}")
         return True

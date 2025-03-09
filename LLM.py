@@ -3,11 +3,12 @@ import json
 import logging
 import requests
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from pathlib import Path
+from datetime import datetime
+from typing import Dict, Any, Optional, Union, List
 from dotenv import load_dotenv
-import re
 
-
+# Thiết lập logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -18,41 +19,55 @@ logging.basicConfig(
 )
 logger = logging.getLogger("llm_client")
 
+# Tên file báo cáo và prompt
+REPORT_FILE = "report.txt"
+PROMPT_FILE = "prompt.txt"
 
 class LLMError(Exception):
-    """Base exception class for LLM errors."""
+    """Base exception class for LLM errors"""
     pass
+
 
 class LLMConnectionError(LLMError):
-    """Exception for LLM connection errors."""
+    """Exception for LLM connection errors"""
     pass
+
 
 class LLMAuthError(LLMError):
-    """Exception for authentication errors."""
+    """Exception for authentication errors"""
     pass
+
 
 class LLMResponseError(LLMError):
-    """Exception for response processing errors."""
+    """Exception for response processing errors"""
     pass
-class BaseLLM(ABC):
-    """Abstract base class for LLM clients."""
 
+
+class LLMFileError(LLMError):
+    """Exception for file handling errors"""
+    pass
+
+
+class BaseLLM(ABC):
+    """Abstract base class for LLM clients"""
+    
     @abstractmethod
     def validate_connection(self) -> bool:
-        """Validate connection to the LLM API."""
+        """Validate connection to the LLM API"""
         pass
-
+    
     @abstractmethod
     def send_prompt(self, prompt: str, max_tokens: int, temperature: float) -> Dict[str, Any]:
-        """Send prompt to LLM and get response."""
+        """Send prompt to LLM and get response"""
         pass
-
+    
     @abstractmethod
     def process_response(self, response: Dict[str, Any]) -> str:
-        """Process response from LLM."""
+        """Process response from LLM"""
         pass
-# --- GeminiClient (sửa đổi) ---
-class ReportManager:
+
+
+class ReportManager(REPORT_FILE):
     """Class responsible for managing and storing LLM interaction reports"""
     
     def __init__(self, report_file):
@@ -64,44 +79,6 @@ class ReportManager:
         """
         self.report_file = report_file
         logger.info(f"Report manager initialized with file: {self.report_file}")
-
-    
-    def generate_report(llm_response: str) -> str:
-        try:
-        # --- Phân tích cú pháp phản hồi của LLM ---
-            match = re.search(
-                r"Loại lỗi:\s*(True|False) Positive.*?"
-                r"Mức độ nghiêm trọng:\s*(Thấp|Trung bình|Cao|Nghiêm trọng).*?"
-                r"GIẢI THÍCH NGẮN GỌN:\s*(.*?)\s*CODE ĐÃ SỬA:\s*(.*?)\s*$",
-                llm_response,
-                re.DOTALL | re.IGNORECASE,
-            )
-
-            if match:
-                is_true_positive = match.group(1).strip()
-                severity = match.group(2).strip()
-                explanation = match.group(3).strip()
-                fixed_code = match.group(4).strip()
-            else:
-                logging.warning("Could not parse LLM response. Using default values.")
-                is_true_positive = "Unknown"
-                severity = "Unknown"
-                explanation = "Could not parse explanation from LLM response."
-                fixed_code = "Could not parse fixed code from LLM response."
-
-            report = f"""KẾT QUẢ PHÂN TÍCH:
-            Loại lỗi: {is_true_positive} Positive
-            Mức độ nghiêm trọng: {severity}
-            GIẢI THÍCH NGẮN GỌN:
-            {explanation}
-            CODE ĐÃ SỬA:
-            {fixed_code}
-            """
-            return report
-
-        except Exception as e:
-            logging.error(f"Error parsing LLM response: {e}")
-        return "Error: Could not generate report due to LLM response parsing error."
     
     def save_report(self, response_content: str) -> str:
         """
@@ -124,46 +101,136 @@ class ReportManager:
             logger.error(f"Error saving response: {str(e)}")
             raise LLMResponseError(f"Failed to save response: {str(e)}")
 
+
+class PromptReader:
+    """Class responsible for reading prompts from files"""
+    
+    @staticmethod
+    def read_prompt_from_file(file_path: str = PROMPT_FILE) -> str:
+        """
+        Read prompt from a text file
+        
+        Args:
+            file_path: Path to the file containing the prompt
+            
+        Returns:
+            str: Content of the prompt file
+            
+        Raises:
+            LLMFileError: If the file doesn't exist or cannot be read
+        """
+        try:
+            logger.info(f"Attempting to read prompt from file: {file_path}")
+            
+            # Check if file exists
+            if not os.path.exists(file_path):
+                error_message = f"Prompt file not found: {file_path}"
+                logger.error(error_message)
+                raise LLMFileError(error_message)
+            
+            # Read file content
+            with open(file_path, 'r', encoding='utf-8') as file:
+                prompt = file.read()
+                
+            if not prompt or prompt.isspace():
+                error_message = f"Prompt file is empty: {file_path}"
+                logger.warning(error_message)
+                raise LLMFileError(error_message)
+                
+            logger.info(f"Successfully read prompt from file ({len(prompt)} characters)")
+            return prompt
+            
+        except (IOError, UnicodeDecodeError) as e:
+            error_message = f"Error reading prompt file: {str(e)}"
+            logger.error(error_message)
+            raise LLMFileError(error_message)
+
+
 class GeminiClient(BaseLLM):
-    """Client for interacting with Google Gemini API."""
-
-    DEFAULT_MODEL = "gemini-1.5-pro-002"  # Model mặc định
-    MAX_TOKENS = 8192  # Điều chỉnh nếu cần
+    """Client for interacting with Google Gemini 2.0 Flash API"""
+    
+    # Class constants
+    DEFAULT_MODEL = "gemini-2.0-flash"
+    MAX_TOKENS = 8192  # Maximum token limit for Gemini 2.0 Flash
     API_VERSION = "v1"
-
+    
     def __init__(self, model: str = DEFAULT_MODEL):
+        """
+        Initialize Gemini client
+        
+        Args:
+            model: Gemini model to use (default: gemini-2.0-flash)
+        """
+        # Load environment variables
+        load_dotenv()
+        
+        # Check API key
         self.api_key = os.getenv("GEMINI_API_KEY")
         if not self.api_key:
             logger.error("API key not found. Please provide GEMINI_API_KEY in .env file")
             raise LLMAuthError("API key not found in .env file")
+        
         self.model = model
         self.api_base = os.getenv("GEMINI_API_BASE", "https://generativelanguage.googleapis.com")
         self.report_manager = ReportManager()
+        self.prompt_reader = PromptReader()
         
         logger.info(f"Gemini Client initialized with model: {self.model}")
-
+    
     def build_api_url(self, endpoint: str) -> str:
+        """
+        Build API URL for Gemini
+        
+        Args:
+            endpoint: API endpoint
+            
+        Returns:
+            str: Complete API URL
+        """
         return f"{self.api_base}/{self.API_VERSION}/{endpoint}?key={self.api_key}"
-
+    
     def validate_connection(self) -> bool:
+        """
+        Validate connection to the Gemini API
+        
+        Returns:
+            bool: True if connection is successful, False otherwise
+        """
         try:
+            # For Gemini, we'll check models endpoint
             url = self.build_api_url("models")
             response = requests.get(url, timeout=10)
+            
             if response.status_code == 200:
                 models = response.json().get("models", [])
                 if any(self.model in model.get("name", "") for model in models):
-                    logger.info("API connection successful, requested model available.")
+                    logger.info("API connection successful, requested model available")
                     return True
-                logger.warning(f"Requested model '{self.model}' not found.")
+                else:
+                    logger.warning(f"Requested model '{self.model}' not found in available models")
+                    return False
+            else:
+                logger.error(f"Connection check failed: {response.status_code} - {response.text}")
                 return False
-            logger.error(f"Connection check failed: {response.status_code} - {response.text}")
-            return False
         except Exception as e:
-            logger.error(f"Error checking connection: {e}")
+            logger.error(f"Error checking connection: {str(e)}")
             return False
-
+    
     def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
-        """Sends the prompt to the Gemini API and returns the raw response."""
+        """
+        Send prompt to Gemini API and get response
+        
+        Args:
+            prompt: Content of the prompt
+            max_tokens: Maximum tokens for the response
+            temperature: Temperature (creativity) of the response
+            
+        Returns:
+            Dict: Response from Gemini
+            
+        Raises:
+            LLMConnectionError: If there's an error connecting to the API
+        """
         try:
             # Ensure max_tokens doesn't exceed limit
             if max_tokens > self.MAX_TOKENS:
@@ -224,10 +291,17 @@ class GeminiClient(BaseLLM):
             error_message = f"Unexpected error sending prompt: {str(e)}"
             logger.error(error_message)
             raise LLMError(error_message)
-
-
+    
     def process_response(self, response: Dict[str, Any]) -> str:
-        """Processes the raw Gemini API response to extract the text."""
+        """
+        Process response from Gemini API
+        
+        Args:
+            response: Response from Gemini API
+            
+        Returns:
+            str: Processed response content
+        """
         try:
             # Extract content from Gemini response structure
             candidates = response.get('candidates', [{}])
@@ -256,35 +330,83 @@ class GeminiClient(BaseLLM):
         except Exception as e:
             logger.error(f"Error processing response: {str(e)}")
             raise LLMResponseError(f"Failed to process response: {str(e)}")
-        
-    def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+    
+    def generate_response(self, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
         """
-        Generates a response for a given prompt (takes prompt directly).
+        Utility function: Read prompt from file, send prompt, process and save response in one call
+        
+        Args:
+            max_tokens: Maximum tokens for the response
+            temperature: Temperature (creativity) of the response
+            
+        Returns:
+            Dict: Result indicating success or failure
         """
         try:
-            # --- Không đọc prompt từ file ---
+            # Read prompt from file
+            prompt = self.prompt_reader.read_prompt_from_file()
+            
+            # Check connection before sending prompt
             if not self.validate_connection():
                 raise LLMConnectionError("Cannot connect to Gemini API")
-
+                
             response = self.send_prompt(prompt, max_tokens, temperature)
             response_content = self.process_response(response)
-
-            # --- Không lưu response vào file (sẽ lưu report sau) ---
-
+            
+            # Save response to report file
+            self.report_manager.save_report(response_content)
+            
             return {
                 "success": True,
-                "message": "Response generated successfully.",
-                "response": response_content,  # Trả về nội dung response
+                "message": f"Response đã được lưu vào file {REPORT_FILE}"
+            }
+        except LLMFileError as e:
+            logger.error(f"Prompt file error: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "PromptFileError"
             }
         except LLMError as e:
+            logger.error(f"LLM error: {str(e)}")
             return {
                 "success": False,
                 "error": str(e),
-                "error_type": e.__class__.__name__,
+                "error_type": e.__class__.__name__
             }
         except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
             return {
                 "success": False,
                 "error": str(e),
-                "error_type": "UnexpectedError",
+                "error_type": "UnexpectedError"
             }
+
+
+# Example usage
+if __name__ == "__main__":
+    try:
+        # Initialize Gemini client
+        gemini = GeminiClient()
+        
+        # Generate response using prompt from file
+        result = gemini.generate_response(
+            max_tokens=2000,
+            temperature=0.7
+        )
+        
+        if result["success"]:
+            print(result["message"])
+        else:
+            print(f"❌ Error: {result['error']} (Type: {result.get('error_type', 'Unknown')})")
+            
+    except LLMAuthError as e:
+        print(f"❌ Authentication error: {str(e)}")
+    except LLMConnectionError as e:
+        print(f"❌ Connection error: {str(e)}")
+    except LLMFileError as e:
+        print(f"❌ File error: {str(e)}")
+    except LLMError as e:
+        print(f"❌ LLM error: {str(e)}")
+    except Exception as e:
+        print(f"❌ Unexpected error: {str(e)}")
