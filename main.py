@@ -52,7 +52,7 @@ async def main():
     def create_prompt(vulnerability: Vulnerability) -> str:
         """Tạo prompt từ thông tin lỗ hổng."""
         return f"""
-    Phát hiện lỗ hổng bảo mật:
+    Bạn là chuyên gia bảo mật Phát hiện lỗ hổng bảo mật:
     File: {vulnerability.file}
     Hàm: {vulnerability.function_name}
     Code của hàm:
@@ -62,6 +62,9 @@ async def main():
     Sink: {vulnerability.sink}
     Mô tả: {vulnerability.message}
     Check ID: {vulnerability.check_id}
+    Nhiệm vụ:
+    1. Xác định đây là lỗi thật (true positive) hay false positive. Nếu là false positive, giải thích lý do.
+    2. Nếu là lỗi thật, đề xuất cách sửa cụ thể kèm mã nguồn mới."
     """
 
     # Tạo prompt từ kết quả phân tích
@@ -82,9 +85,9 @@ async def main():
         prompt = create_prompt(result)
         if prompt:
             llm_results = gemini.analyze_vulnerability(prompt, max_tokens=2000, temperature=0.7)
-            logging.info(f"LLM Response for  {llm_results}")
+            print(f"LLM Response for  {llm_results}")
         else:
-            logging.info("Failed to create prompt")
+            print("Failed to create prompt")
 
     
 

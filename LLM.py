@@ -94,7 +94,6 @@ class ReportManager:
             # Append response to the report file
             with open(self.report_file, 'w', encoding='utf-8') as f:
                 f.write(response_content)
-                
             logger.info(f"Response saved to: {self.report_file}")
             return self.report_file
         except Exception as e:
@@ -205,6 +204,7 @@ class GeminiClient(BaseLLM):
             
             response = self.send_prompt(prompt, max_tokens, temperature)
             response_content = self.process_response(response)
+            print(response_content)
             
             # Lưu vào Report file
             self.report_manager.save_report(response_content)
@@ -213,12 +213,26 @@ class GeminiClient(BaseLLM):
                 "success": True,
                 "message": f"Response đã được lưu vào file {REPORT_FILE}"
             }
+        except LLMFileError as e:
+            logger.error(f"Prompt file error: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "PromptFileError"
+            }
         except LLMError as e:
             logger.error(f"LLM error: {str(e)}")
             return {
                 "success": False,
                 "error": str(e),
                 "error_type": e.__class__.__name__
+            }
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "UnexpectedError"
             }
         
     
