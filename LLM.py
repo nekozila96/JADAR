@@ -127,7 +127,7 @@ class ReportManager:
 class GeminiClient(BaseLLM):
     """Client for interacting with Google Gemini API."""
 
-    DEFAULT_MODEL = "gemini-2.0-flash"  # Model mặc định
+    DEFAULT_MODEL = "gemini-1.5-pro-002"  # Model mặc định
     MAX_TOKENS = 8192  # Điều chỉnh nếu cần
     API_VERSION = "v1"
 
