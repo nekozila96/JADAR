@@ -145,7 +145,7 @@ class GeminiClient(BaseLLM):
             logger.error(f"Error checking connection: {str(e)}")
             return False
     
-    def create_prompt(self, vulnerability: Dict[str, Any], output_filename: str, local_path: str) -> str:
+    async def create_prompt(self, vulnerability: Dict[str, Any], output_filename: str, local_path: str) -> str:
         """
         Tạo prompt từ thông tin lỗ hổng.
 
@@ -168,7 +168,7 @@ class GeminiClient(BaseLLM):
             return None
 
         extractor = JavaVulnerabilityExtractor(local_path)
-        results = extractor.analyze_vulnerabilities(json_reports)
+        results = await extractor.analyze_vulnerabilities(json_reports)
 
         # Tìm vulnerability tương ứng trong results
         matching_result = None
