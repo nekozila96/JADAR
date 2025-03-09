@@ -197,13 +197,12 @@ class GeminiClient(BaseLLM):
             logger.error(f"Error processing response: {str(e)}")
             raise LLMResponseError(f"Failed to process response: {str(e)}")
     
-    def analyze_vulnerability(self, vulnerability: Dict[str, Any], max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+    def analyze_vulnerability(self, prompt, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
         """Phân tích lỗ hổng và lưu báo cáo"""
         try:
             if not self.validate_connection():
                 raise LLMConnectionError("Cannot connect to Gemini API")
             
-            prompt = self.create_prompt(vulnerability)  # Tạo prompt từ thông tin lỗi
             response = self.send_prompt(prompt, max_tokens, temperature)
             response_content = self.process_response(response)
             

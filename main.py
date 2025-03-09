@@ -81,7 +81,7 @@ async def main():
     for result in results:
         prompt = create_prompt(result)
         if prompt:
-            result = gemini.analyze_vulnerability(prompt=prompt, max_tokens=2000, temperature=0.7)
+            result = gemini.analyze_vulnerability(prompt, max_tokens=2000, temperature=0.7)
             print(f"LLM Response for  {result}")
         else:
             print("Failed to create prompt")
