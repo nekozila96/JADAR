@@ -145,6 +145,22 @@ class GeminiClient(BaseLLM):
             logger.error(f"Error checking connection: {str(e)}")
             return False
     
+    def create_prompt(self, vulnerability: Dict[str, Any]) -> str:
+        """Tạo prompt từ thông tin lỗ hổng bảo mật"""
+        return f"""
+        Phát hiện lỗ hổng bảo mật:
+        File: {vulnerability.get('file', 'N/A')}
+        Check ID: {vulnerability.get('check_id', 'N/A')}
+        Start line: {vulnerability.get('start_line', 'N/A')}
+        Hàm: {vulnerability.get('function_name', 'N/A')}
+        Code của hàm:
+        {vulnerability.get('function_code', 'N/A')}
+        Dòng: {vulnerability.get('line', 'N/A')}
+        Severity: {vulnerability.get('severity', 'N/A')}
+        Confidence: {vulnerability.get('confidence', 'N/A')}
+        Mô tả: {vulnerability.get('message', 'N/A')}
+        """
+    
     def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
         # Giữ nguyên như code gốc
         try:
