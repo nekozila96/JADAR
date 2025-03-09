@@ -58,9 +58,9 @@ async def main():
             prompt = await gemini.create_prompt(vulnerability, os.path.join(local_path, output_filename), local_path)
             if prompt:
                 result = gemini.analyze_vulnerability(prompt=prompt, max_tokens=2000, temperature=0.7)
-                print(f"LLM Response for {vulnerability['file']}: {result}")
+                print(f"LLM Response for  {result}")
             else:
-                print(f"Failed to create prompt for {vulnerability['file']}.")
+                print("Failed to create prompt")
 
     except FileNotFoundError:
         print(f"Error: Analysis output file not found: {output_filename}")
