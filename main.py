@@ -58,8 +58,6 @@ async def main():
     Code của hàm:
     {vulnerability.function_code}
     Dòng: {vulnerability.line}
-    Source: {', '.join(vulnerability.source)}
-    Sink: {vulnerability.sink}
     Mô tả: {vulnerability.message}
     Check ID: {vulnerability.check_id}
     Nhiệm vụ:
@@ -84,8 +82,11 @@ async def main():
     for result in results:
         prompt = create_prompt(result)
         if prompt:
-            llm_results = gemini.analyze_vulnerability(prompt, max_tokens=2000, temperature=0.7)
-            print(f"LLM Response for  {llm_results}")
+            try:
+                response = gemini.analyze_vulnerability(prompt, max_tokens=2000, temperature=0.7)
+                print(f"LLM Response for {result['file']}: {response['message']}")
+            except LLMResponseError as e:
+                print(f"Failed to analyze vulnerability: {e}")
         else:
             print("Failed to create prompt")
 
