@@ -47,39 +47,26 @@ async def main():
     else:
         print("Repository cloning failed.")
 
+    gemini = GeminiClient()
+
+    # Tạo prompt từ kết quả phân tích
     try:
-        with open(output_filename, "r", encoding="utf-8") as f:
-            json_reports = json.load(f)
+        with open(os.path.join(local_path, output_filename), "r", encoding="utf-8") as f:
+            vulnerabilities = json.load(f)
+
+        for vulnerability in vulnerabilities:
+            prompt = gemini.create_prompt(vulnerability, os.path.join(local_path, filename), local_path)
+            if prompt:
+                result = await gemini.generate_response(prompt=prompt, max_tokens=2000, temperature=0.7)
+                print(f"LLM Response for {vulnerability['file']}: {result}")
+            else:
+                print(f"Failed to create prompt for {vulnerability['file']}.")
+
     except FileNotFoundError:
-        print(f"Error: Semgrep output file not found: {output_filename}")
-        return
+        print(f"Error: Analysis output file not found: {output_filename}")
     except json.JSONDecodeError:
-        print(f"Error: Invalid JSON in Semgrep output file: {output_filename}")
-        return
+        print(f"Error: Invalid JSON in analysis output file: {output_filename}")
 
-
-    extractor = JavaVulnerabilityExtractor(local_path)
-    results = await extractor.analyze_vulnerabilities(json_reports)
-
-    try:
-        llm_client = GeminiClient()
-        if not llm_client.validate_connection():
-            print("Error: Could not connect to Gemini API.")
-            return
-    except LLMAuthError as e:
-        print(f"Authentication error: {e}")
-        return
-      
-    for result in results:
-        print("Vulnerability Report:")
-        print("-" * 20)
-        prompt = llm_client.create_prompt(result)
-        print("=" * 30)
-        print("Prompt:\n", prompt)
-        
-        response = await llm_client.analyze_vulnerability(prompt)
-        print("LLM Analysis:\n", response)
-        print("=" * 30)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, Union, List
 from dotenv import load_dotenv
-from prompt import Vulnerability
+from prompt import Vulnerability,JavaVulnerabilityExtractor
 
 # Thiết lập logging
 logging.basicConfig(
@@ -145,21 +145,62 @@ class GeminiClient(BaseLLM):
             logger.error(f"Error checking connection: {str(e)}")
             return False
     
-    def create_prompt(self, vulnerability: Dict[str, Any]) -> str:
-        """Tạo prompt từ thông tin lỗ hổng bảo mật"""
-        return f"""
-        Phát hiện lỗ hổng bảo mật:
-        File: {vulnerability.get('file', 'N/A')}
-        Check ID: {vulnerability.get('check_id', 'N/A')}
-        Start line: {vulnerability.get('start_line', 'N/A')}
-        Hàm: {vulnerability.get('function_name', 'N/A')}
-        Code của hàm:
-        {vulnerability.get('function_code', 'N/A')}
-        Dòng: {vulnerability.get('line', 'N/A')}
-        Severity: {vulnerability.get('severity', 'N/A')}
-        Confidence: {vulnerability.get('confidence', 'N/A')}
-        Mô tả: {vulnerability.get('message', 'N/A')}
+    def create_prompt(self, vulnerability: Dict[str, Any], output_filename: str, local_path: str) -> str:
         """
+        Tạo prompt từ thông tin lỗ hổng.
+
+        Args:
+            vulnerability: Thông tin về lỗ hổng.
+            output_filename: Tên file JSON chứa kết quả Semgrep.
+            local_path: Đường dẫn đến thư mục chứa mã nguồn.
+
+        Returns:
+            Prompt dưới dạng chuỗi, hoặc None nếu có lỗi.
+        """
+        try:
+            with open(output_filename, "r", encoding="utf-8") as f:
+                json_reports = json.load(f)
+        except FileNotFoundError:
+            print(f"Error: Semgrep output file not found: {output_filename}")
+            return None
+        except json.JSONDecodeError:
+            print(f"Error: Invalid JSON in Semgrep output file: {output_filename}")
+            return None
+
+        extractor = JavaVulnerabilityExtractor(local_path)
+        results = extractor.analyze_vulnerabilities(json_reports)
+
+        # Tìm vulnerability tương ứng trong results
+        matching_result = None
+        for result in results:
+            if (
+                result.file == vulnerability.get('file')
+                and result.index == vulnerability.get('index')
+                and result.check_id == vulnerability.get('check_id')
+                and result.start_line == vulnerability.get('start_line')
+            ):
+                matching_result = result
+                break
+
+        if matching_result is None:
+          print("Error: Could not find matching vulnerability in analysis results")
+          return None
+
+        prompt = f"""
+        Phát hiện lỗ hổng bảo mật:
+        File: {matching_result.file}
+        Check ID: {matching_result.check_id}
+        Start line: {matching_result.start_line}
+        Hàm: {matching_result.function_name}
+        Code của hàm:
+        {matching_result.function_code}
+        Dòng: {matching_result.line}
+        Severity: {matching_result.severity}
+        Confidence: {matching_result.confidence}
+        Mô tả: {matching_result.message}
+        """
+        return prompt
+
     
     def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
         # Giữ nguyên như code gốc
