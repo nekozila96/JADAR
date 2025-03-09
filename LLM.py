@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, Union, List
 from dotenv import load_dotenv
-from prompt import Vulnerability,JavaVulnerabilityExtractor
+import re 
 
 # Thiết lập logging
 logging.basicConfig(
@@ -197,26 +197,87 @@ class GeminiClient(BaseLLM):
             logger.error(f"Error processing response: {str(e)}")
             raise LLMResponseError(f"Failed to process response: {str(e)}")
     
-    def analyze_vulnerability(self, prompt, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
-        """Phân tích lỗ hổng và lưu báo cáo"""
+        
+    def generate_and_save_report(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+        """
+        Generates a response, parses it, formats it as a report, and saves it.
+        """
         try:
             if not self.validate_connection():
                 raise LLMConnectionError("Cannot connect to Gemini API")
-            
-            response = self.send_prompt(prompt, max_tokens, temperature)
-            response_content = self.process_response(response)
-            
-            # Lưu vào Report file
-            self.report_manager.save_report(response_content)
-            
+
+            raw_response = self.send_prompt(prompt, max_tokens, temperature)
+            llm_response_text = self.process_response(raw_response)
+
+            # --- Phân tích cú pháp và tạo báo cáo ---
+            report = self._generate_report_from_response(llm_response_text) # Sử dụng hàm hỗ trợ
+
+            # --- Lưu báo cáo ---
+            self._save_report(report)  # Sử dụng hàm hỗ trợ
+
             return {
                 "success": True,
-                "message": f"Response đã được lưu vào file {REPORT_FILE}"
+                "message": f"Report saved to {self.report_file}",
+                "report": report,  # Trả về report
             }
         except LLMError as e:
-            logger.error(f"LLM error: {str(e)}")
             return {
                 "success": False,
                 "error": str(e),
-                "error_type": e.__class__.__name__
+                "error_type": e.__class__.__name__,
             }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "error_type": "UnexpectedError",
+            }
+    def _generate_report_from_response(self, llm_response_text: str) -> str:
+        """
+        Helper function to parse the LLM response and create the formatted report.
+        (This is the same logic as the previous generate_report function).
+        """
+        try:
+            match = re.search(
+                r"Loại lỗi:\s*(True|False) Positive.*?"
+                r"Mức độ nghiêm trọng:\s*(Thấp|Trung bình|Cao|Nghiêm trọng).*?"
+                r"GIẢI THÍCH NGẮN GỌN:\s*(.*?)\s*CODE ĐÃ SỬA:\s*(.*?)\s*$",
+                llm_response_text,
+                re.DOTALL | re.IGNORECASE,
+            )
+
+            if match:
+                is_true_positive = match.group(1).strip()
+                severity = match.group(2).strip()
+                explanation = match.group(3).strip()
+                fixed_code = match.group(4).strip()
+            else:
+                logging.warning("Could not parse LLM response. Using default values.")
+                is_true_positive = "Unknown"
+                severity = "Unknown"
+                explanation = "Could not parse explanation from LLM response."
+                fixed_code = "Could not parse fixed code from LLM response."
+
+            report = f"""KẾT QUẢ PHÂN TÍCH:
+Loại lỗi: {is_true_positive} Positive
+Mức độ nghiêm trọng: {severity}
+GIẢI THÍCH NGẮN GỌN:
+{explanation}
+CODE ĐÃ SỬA:
+{fixed_code}
+"""
+            return report
+
+        except Exception as e:
+            logging.error(f"Error parsing LLM response: {e}")
+            return "Error: Could not generate report due to LLM response parsing error."
+
+    def _save_report(self, report: str) -> None:
+        """Helper function to save the report to the file."""
+        try:
+            with open(self.report_file, "a", encoding="utf-8") as f:
+                f.write(report)
+                f.write("\n" + "=" * 40 + "\n")
+            logging.info(f"Report saved to: {self.report_file}")
+        except Exception as e:
+            logging.error(f"Error saving report: {e}")
