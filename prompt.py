@@ -20,9 +20,8 @@ logging.basicConfig(
 @dataclass
 class Vulnerability:
     file: str
-    # function: str # Thay đổi kiểu
     function_name: str  # Tên hàm
-    function_code: str  # Thêm trường này
+    function_code: str  # Toàn bộ code của hàm
     line: int
     source: List[str]
     sink: str
@@ -32,7 +31,6 @@ class Vulnerability:
     check_id: str
     index: int
     start_line: int
-
 
 class JavaVulnerabilityExtractor:
     """
@@ -48,7 +46,7 @@ class JavaVulnerabilityExtractor:
         self, json_reports: List[Dict[str, Any]]
     ) -> List[Vulnerability]:
         loop = asyncio.get_running_loop()
-        with concurrent.futures.ProcessPoolExecutor() as executor:  # Thử ProcessPoolExecutor
+        with concurrent.futures.ProcessPoolExecutor() as executor:
             tasks = [
                 loop.run_in_executor(executor, self._analyze_single_report, report)
                 for report in json_reports
@@ -60,10 +58,9 @@ class JavaVulnerabilityExtractor:
         """Analyzes a single JSON report."""
         try:
             file_path, code = self._read_java_file(report)
-            if not code:  # Kiểm tra code
+            if not code:
                 return None
             tree = self._parse_java_code(code)
-            # Thay đổi ở đây:
             method_info = self._get_method_info(tree, report["start_line"], file_path)
             if not method_info:
                 return None
@@ -72,18 +69,18 @@ class JavaVulnerabilityExtractor:
             vulnerability_details = self._extract_vulnerability_details(
                 tree, report, file_path, method_name, method_code
             )
-            if not vulnerability_details:  # Kiểm tra
+            if not vulnerability_details:
                 return None
 
-            return Vulnerability(**vulnerability_details)  # Dùng dataclass
+            return Vulnerability(**vulnerability_details)
 
         except Exception as e:
             logging.error(
                 f"Error processing report {report.get('index', '')}: {e}", exc_info=True
-            )  # Log lỗi
+            )
             return None
 
-    def _read_java_file(self, report: Dict[str, Any]) -> tuple[Path, str | None]:
+    def _read_java_file(self, report: Dict[str, Any]) -> Tuple[Path, Optional[str]]:
         """Reads the Java file and handles errors."""
         file_path_str = report["file_path"]
         if not os.path.isabs(file_path_str):
@@ -92,8 +89,8 @@ class JavaVulnerabilityExtractor:
             file_path = Path(file_path_str)
 
         if not file_path.suffix.lower() == ".java":
-            logging.info(f"Skipping non-Java file: {file_path}")  # Log, không phải error
-            return file_path, None  # Trả về None để bỏ qua
+            logging.info(f"Skipping non-Java file: {file_path}")
+            return file_path, None
 
         if not file_path.exists():
             logging.error(f"File not found: {file_path}")
@@ -136,12 +133,12 @@ class JavaVulnerabilityExtractor:
         confidence = report["confidence"]
 
         sink = self._identify_sink(check_id, lines_of_code)
-        sources = self._identify_sources(tree, method_name)  # Cần cải thiện
+        sources = self._identify_sources(tree, method_name)
         return {
             "file": str(file_path),
             "index": index,
-            "function_name": method_name,  # Tên hàm
-            "function_code": method_code,  # Toàn bộ code của hàm
+            "function_name": method_name,
+            "function_code": method_code,
             "line": lines_of_code,
             "start_line": start_line,
             "severity": severity,
@@ -164,23 +161,16 @@ class JavaVulnerabilityExtractor:
                 for path2, node2 in node.filter(javalang.tree.Statement):
                     if (
                         hasattr(node2, "position")
-                        and node2.position != None
+                        and node2.position is not None
                         and node2.position.line >= start_line
                     ):
                         # Lấy vị trí bắt đầu và kết thúc
                         start_pos = node.position.line
-                        end_pos = None
+                        end_pos = self._find_method_end(node, file_path)
 
-                        # javalang không cung cấp vị trí kết thúc trực tiếp,
-                        # nên ta phải tìm node tiếp theo.
-                        next_node = None
-                        body = None
-                        if isinstance(node, javalang.tree.MethodDeclaration):
-                            body = node.body
-                        if body and isinstance(node.body, list) and len(body) > 0:
-                            end_pos = body[-1].position.line
                         if end_pos is None:
                             return None
+
                         # Đọc toàn bộ file
                         try:
                             with open(file_path, "r", encoding="utf-8") as f:
@@ -194,9 +184,28 @@ class JavaVulnerabilityExtractor:
                         return node.name, method_code
         return None
 
+    def _find_method_end(self, node, file_path: Path) -> Optional[int]:
+        """
+        Finds the end line of a method by counting braces.
+        """
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        except Exception as e:
+            logging.error("Error when reading file.", e)
+            return None
+
+        start_pos = node.position.line - 1
+        brace_count = 0
+        for i in range(start_pos, len(lines)):
+            brace_count += lines[i].count('{')
+            brace_count -= lines[i].count('}')
+            if brace_count == 0:
+                return i + 1
+        return None
+
     def _identify_sink(self, check_id: str, lines_of_code: str) -> str:
         """Identifies the sink."""
-        # ... (như code trước, hoặc cải thiện) ...
         sink = "Unknown"
         if "tainted-cmd-from-http-request" in check_id:
             match = re.search(r"(\w+\.\w+\(\s*(.*?)\s*\))", lines_of_code)
@@ -204,12 +213,10 @@ class JavaVulnerabilityExtractor:
                 sink = match.group(1)
         elif "tainted-sql" in check_id:
             sink = "SQL query execution"
-        # Thêm các trường hợp khác nếu cần
         return sink
 
     def _identify_sources(self, tree, method_name: str) -> List[str]:
         """Identifies potential sources (simplified)."""
-        # ... (như code trước, hoặc cải thiện với data flow analysis) ...
         sources = []
         method_declaration = None
         for path, node in tree.filter(javalang.tree.MethodDeclaration):
@@ -225,5 +232,3 @@ class JavaVulnerabilityExtractor:
                 sources.append(param.name)
 
         return sources
-    
-    

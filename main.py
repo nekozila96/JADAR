@@ -17,29 +17,31 @@ async def main():
     local_path = os.path.join(os.getcwd(), repo_name)
     filename = f"{repo_name}.json"
     output_filename = f"{repo_name}_output.json"
+    prompt_filename = "prompt.txt"
+    report_filename = "report.txt"
 
     if os.path.exists(output_filename):
         os.chdir(local_path)
-        logging.info(f"Repository, Semgrep results, and analysis found at f{local_path}. Skipping all processes.")
+        logging.info(f"Repository, Semgrep results, and analysis found at {local_path}. Skipping all processes.")
         print("Cloning, scanning, and analysis skipped as results already exist.")
         return
     elif os.path.exists(local_path) and os.path.exists(filename):
         os.chdir(local_path)
-        logging.info(f"Repository and Semgrep results found at f{local_path}. Skipping cloning and scanning.")
+        logging.info(f"Repository and Semgrep results found at {local_path}. Skipping cloning and scanning.")
         print("Semgrep scan and cloning skipped.")
         analysis_semgrep(filename, output_filename) 
         return
     elif os.path.exists(local_path):
         os.chdir(local_path)
-        logging.info(f"Directory f{local_path} already exists. Running Semgrep only.")
-        if run_semgrep(local_path,repo_name):
+        logging.info(f"Directory {local_path} already exists. Running Semgrep only.")
+        if run_semgrep(local_path, repo_name):
             print("Semgrep scan completed successfully.")
             analysis_semgrep(filename, output_filename) 
         else:
             print("Semgrep scan failed.")
         return
     elif clone_github_repo(repo_url, repo_name):
-        if run_semgrep(local_path,repo_name):
+        if run_semgrep(local_path, repo_name):
             print("Semgrep scan completed successfully.")
             analysis_semgrep(filename, output_filename)
         else:
@@ -62,7 +64,7 @@ async def main():
     Check ID: {vulnerability.check_id}
     Nhiệm vụ:
     1. Xác định đây là lỗi thật (true positive) hay false positive. Nếu là false positive, giải thích lý do.
-    2. Nếu là lỗi thật, đề xuất cách sửa cụ thể kèm mã nguồn mới."
+    2. Nếu là lỗi thật, đề xuất cách sửa cụ thể kèm mã nguồn mới.
     """
 
     # Tạo prompt từ kết quả phân tích
@@ -75,20 +77,30 @@ async def main():
     except json.JSONDecodeError:
         print(f"Error: Invalid JSON in Semgrep output file: {output_filename}")
         return None
+
     extractor = JavaVulnerabilityExtractor(local_path)
     results = await extractor.analyze_vulnerabilities(json_reports)
 
+    # Ghi các prompt vào file PROMPT.txt
+    with open(prompt_filename, "w", encoding="utf-8") as prompt_file:
+        for result in results:
+            prompt = create_prompt(result)
+            prompt_file.write(prompt + "\n")
 
-    for result in results:
-        prompt = create_prompt(result)
-        if prompt:
-            try:
-                response = gemini.analyze_vulnerability(prompt, max_tokens=2000, temperature=0.7)
-                print(f"LLM Response for {result['file']}: {response['message']}")
-            except LLMResponseError as e:
-                print(f"Failed to analyze vulnerability: {e}")
-        else:
-            print("Failed to create prompt")
+    print(f"All prompts have been written to {prompt_filename}")
+    
+    gemini = GeminiClient()
+        
+        # Generate response using prompt from file
+    result = gemini.generate_response(
+            max_tokens=2000,
+            temperature=0.7
+        )
+        
+    if result["success"]:
+        print(result["message"])
+    else:
+        print(f"❌ Error: {result['error']} (Type: {result.get('error_type', 'Unknown')})")
 
     
 
