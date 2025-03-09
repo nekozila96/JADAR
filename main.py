@@ -73,7 +73,7 @@ async def main():
     for result in results:
         print("Vulnerability Report:")
         print("-" * 20)
-        for key, value in asdict.items(result):
+        for key, value in asdict(result).items():
             prompt = llm_client.create_prompt(key,value)
             print("=" * 30)
             print("Prompt:\n", prompt)
