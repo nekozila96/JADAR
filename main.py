@@ -10,32 +10,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def create_prompt(vulnerability: Vulnerability) -> str:
-    prompt = """
-    Bạn là một chuyên gia bảo mật Java Web. Dưới đây là thông tin từ Semgrep về một lỗi bảo mật:
-    Phát hiện lỗ hổng bảo mật:
-    File: {vulnerability.file}
-    Hàm: {vulnerability.function_name}
-    Code của hàm:
-    {vulnerability.function_code}
-    Dòng: {vulnerability.line}
-    Severity: {vulnerability.severity}
-    Confidence: {vulnerability.confidence}
-    Source: {', '.join(vulnerability.source)}
-    Sink: {vulnerability.sink}
-    Mô tả: {vulnerability.message}
-    Check ID: {vulnerability.check_id}
-    Hãy trả lời theo format sau để tôi có thể dễ dàng đưa vào báo cáo:
-    KẾT QUẢ PHÂN TÍCH:
-    Loại lỗi: [True/False] Positive
-    Mức độ nghiêm trọng: [Thấp/Trung bình/Cao/Nghiêm trọng]
-    GIẢI THÍCH NGẮN GỌN:
-    [Liệt kê các lý do xác nhận đây là lỗi thật hoặc lý do đây là false positive]
-    CODE ĐÃ SỬA:
-    [Code đã được sửa]
-        """
-    return prompt
-
 async def main():
     repo_url = input("Please input the URL of Repository you want to test: ")
     repo_name = repo_url.split("/")[-1]
@@ -85,6 +59,22 @@ async def main():
 
     extractor = JavaVulnerabilityExtractor(local_path)
     results = await extractor.analyze_vulnerabilities(json_reports)
+    def create_prompt(vulnerability: Vulnerability) -> str:
+        """Tạo prompt từ thông tin lỗ hổng."""
+        return f"""
+    Phát hiện lỗ hổng bảo mật:
+    Index: {vulnerability.index}
+    File: {vulnerability.file}
+    Check ID: {vulnerability.check_id}
+    Start line: {vulnerability.start_line}
+    Hàm: {vulnerability.function_name}
+    Code của hàm:
+    {vulnerability.function_code}
+    Dòng: {vulnerability.line}
+    Severity: {vulnerability.severity}
+    Confidence: {vulnerability.confidence}
+    Mô tả: {vulnerability.message}
+    """
 
     try:
         llm_client = GeminiClient()
@@ -101,9 +91,9 @@ async def main():
         prompt = create_prompt(result)
         print("=" * 30)
         print("Prompt:\n", prompt)
-        try:
-            llm_result = llm_client.generate_response(prompt)  # Gọi LLM
+        try:  
             llm_result = llm_client.generate_response(
+            prompt,
             max_tokens=2000,
             temperature=0.7
             )   

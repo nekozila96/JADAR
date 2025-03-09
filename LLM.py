@@ -7,7 +7,6 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 import re
 
-load_dotenv("GEMINI_API_KEY")
 
 logging.basicConfig(
     level=logging.INFO,
