@@ -197,11 +197,21 @@ class JavaVulnerabilityExtractor:
 
         start_pos = node.position.line - 1
         brace_count = 0
+        in_method_signature = True
         for i in range(start_pos, len(lines)):
-            brace_count += lines[i].count('{')
-            brace_count -= lines[i].count('}')
-            if brace_count == 0:
-                return i + 1
+            if in_method_signature:
+                # Check if the method signature ends and the method body starts
+                if '{' in lines[i]:
+                    in_method_signature = False
+                    brace_count += lines[i].count('{')
+                    brace_count -= lines[i].count('}')
+                    if brace_count == 0:
+                        return i + 1
+            else:
+                brace_count += lines[i].count('{')
+                brace_count -= lines[i].count('}')
+                if brace_count == 0:
+                    return i + 1
         return None
 
     def _identify_sink(self, check_id: str, lines_of_code: str) -> str:
