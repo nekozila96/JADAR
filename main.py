@@ -62,7 +62,7 @@ async def main():
     # Ghi các prompt vào file PROMPT.txt
     with open(prompt_filename, "w", encoding="utf-8") as prompt_file:
         for result in results:
-            prompt = PromptGenerator.create_prompt(result)
+            prompt = PromptGenerator.create_prompt(asdict(result).items())
             prompt_file.write(prompt + "\n")
 
     print(f"All prompts have been written to {prompt_filename}")
