@@ -50,7 +50,6 @@ async def main():
         print("Repository cloning failed.")
 
     gemini = GeminiClient()
-
     prompt_generator = PromptGenerator(output_filename)
 
     json_reports = prompt_generator.load_reports()
@@ -59,10 +58,11 @@ async def main():
 
     extractor = JavaVulnerabilityExtractor(local_path)
     results = await extractor.analyze_vulnerabilities(json_reports)
+
     # Ghi các prompt vào file PROMPT.txt
     with open(prompt_filename, "w", encoding="utf-8") as prompt_file:
         for result in results:
-            prompt = PromptGenerator.create_prompt(asdict(result).items())
+            prompt = PromptGenerator.create_prompt(result)
             prompt_file.write(prompt + "\n")
 
     print(f"All prompts have been written to {prompt_filename}")
@@ -80,7 +80,7 @@ async def main():
     else:
         print(f"❌ Error: {result['error']} (Type: {result.get('error_type', 'Unknown')})")
 
-    print(f"All LLM responses have been written to {report_filename}")
+    
 
 
 if __name__ == "__main__":

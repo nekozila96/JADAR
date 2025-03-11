@@ -7,6 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, Union, List
 from dotenv import load_dotenv
+from prompt import Vulnerability
 
 # Thiết lập logging
 logging.basicConfig(
@@ -118,7 +119,7 @@ class PromptGenerator:
             logging.error(f"Error: Invalid JSON in Semgrep output file: {self.output_filename}")
             return []
 
-    def create_prompt(self, vulnerability: Dict[str, Any]) -> str:
+    def create_prompt(self, vulnerability: Vulnerability) -> str:
         """Tạo prompt từ thông tin lỗ hổng."""
         return f"""
     Bạn là chuyên gia bảo mật Phát hiện lỗ hổng bảo mật:
