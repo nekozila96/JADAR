@@ -30,7 +30,7 @@ class Vulnerability:
     confidence: str
     check_id: str
     index: int
-    start_line: int
+    cwe: str
 
 class JavaVulnerabilityExtractor:
     """
@@ -127,7 +127,7 @@ class JavaVulnerabilityExtractor:
         index = report["index"]
         message = report["message"]
         check_id = report["check_id"]
-        start_line = report["start_line"]
+        cwe = report["cwe"]
         lines_of_code = report["lines"]
         severity = report["severity"]
         confidence = report["confidence"]
@@ -135,18 +135,18 @@ class JavaVulnerabilityExtractor:
         sink = self._identify_sink(check_id, lines_of_code)
         sources = self._identify_sources(tree, method_name)
         return {
-            "file": str(file_path),
             "index": index,
+            "file": str(file_path),
+            "check_id": check_id,
             "function_name": method_name,
             "function_code": method_code,
             "line": lines_of_code,
-            "start_line": start_line,
             "severity": severity,
             "confidence": confidence,
             "source": sources,
             "sink": sink,
             "message": message,
-            "check_id": check_id,
+            "cwe": cwe
         }
 
     def _get_method_info(
