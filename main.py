@@ -83,12 +83,12 @@ async def main():
 
     extractor = JavaVulnerabilityExtractor(local_path)
     results = await extractor.analyze_vulnerabilities(json_reports)
-    prompt = create_prompt(result)
-    
+    result_prompt = create_prompt(results)
+
     # Ghi các prompt vào file PROMPT.txt
     with open(prompt_filename, "w", encoding="utf-8") as prompt_file:
-        for result in results:
-            prompt_file.write(prompt + "\n")
+        for result in result_prompt:
+            prompt_file.write(result + "\n")
 
     print(f"All prompts have been written to {prompt_filename}")
     
