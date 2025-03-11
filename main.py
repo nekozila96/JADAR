@@ -51,44 +51,19 @@ async def main():
 
     gemini = GeminiClient()
 
-    def create_prompt(vulnerability: Vulnerability) -> str:
-        """Tạo prompt từ thông tin lỗ hổng."""
-        return f"""
-    Bạn là chuyên gia bảo mật Phát hiện lỗ hổng bảo mật:
-    Index: {vulnerability.index}
-    File: {vulnerability.file}
-    Check ID: {vulnerability.check_id}
-    Hàm: {vulnerability.function_name}
-    Code của hàm:
-    {vulnerability.function_code}
-    Dòng: {vulnerability.line}
-    Severity: {vulnerability.severity}
-    Confidence: {vulnerability.confidence}
-    CWE: {vulnerability.cwe}
-    Nhiệm vụ:
-    1. Xác định đây là lỗi thật (true positive) hay false positive. Nếu là false positive, giải thích lý do.
-    2. Nếu là lỗi thật, đề xuất cách sửa cụ thể kèm mã nguồn mới.
-    """
+    prompt_generator = PromptGenerator(output_filename)
 
-    # Tạo prompt từ kết quả phân tích
-    try:
-        with open(output_filename, "r", encoding="utf-8") as f:
-            json_reports = json.load(f)
-    except FileNotFoundError:
-        print(f"Error: Semgrep output file not found: {output_filename}")
-        return None
-    except json.JSONDecodeError:
-        print(f"Error: Invalid JSON in Semgrep output file: {output_filename}")
-        return None
+    json_reports = prompt_generator.load_reports()
+    if not json_reports:
+        return
 
     extractor = JavaVulnerabilityExtractor(local_path)
     results = await extractor.analyze_vulnerabilities(json_reports)
-    result_prompt = create_prompt(results)
-
     # Ghi các prompt vào file PROMPT.txt
     with open(prompt_filename, "w", encoding="utf-8") as prompt_file:
-        for result in result_prompt:
-            prompt_file.write(result + "\n")
+        for result in results:
+            prompt = PromptGenerator.create_prompt(result)
+            prompt_file.write(prompt + "\n")
 
     print(f"All prompts have been written to {prompt_filename}")
     
@@ -105,7 +80,7 @@ async def main():
     else:
         print(f"❌ Error: {result['error']} (Type: {result.get('error_type', 'Unknown')})")
 
-    
+    print(f"All LLM responses have been written to {report_filename}")
 
 
 if __name__ == "__main__":

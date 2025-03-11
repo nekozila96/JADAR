@@ -135,8 +135,8 @@ class JavaVulnerabilityExtractor:
         sink = self._identify_sink(check_id, lines_of_code)
         sources = self._identify_sources(tree, method_name)
         return {
-            "file": str(file_path),
             "index": index,
+            "file": str(file_path),
             "check_id": check_id,
             "function_name": method_name,
             "function_code": method_code,

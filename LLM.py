@@ -101,6 +101,41 @@ class ReportManager:
         except Exception as e:
             logger.error(f"Error saving response: {str(e)}")
             raise LLMResponseError(f"Failed to save response: {str(e)}")
+        
+class PromptGenerator:
+    def __init__(self, output_filename: str):
+        self.output_filename = output_filename
+
+    def load_reports(self) -> List[Dict[str, Any]]:
+        try:
+            with open(self.output_filename, "r", encoding="utf-8") as f:
+                json_reports = json.load(f)
+            return json_reports
+        except FileNotFoundError:
+            logging.error(f"Error: Semgrep output file not found: {self.output_filename}")
+            return []
+        except json.JSONDecodeError:
+            logging.error(f"Error: Invalid JSON in Semgrep output file: {self.output_filename}")
+            return []
+
+    def create_prompt(self, vulnerability: Dict[str, Any]) -> str:
+        """Tạo prompt từ thông tin lỗ hổng."""
+        return f"""
+    Bạn là chuyên gia bảo mật Phát hiện lỗ hổng bảo mật:
+    Index: {vulnerability['index']}
+    File: {vulnerability['file']}
+    Check ID: {vulnerability['check_id']}
+    Hàm: {vulnerability['function_name']}
+    Code của hàm:
+    {vulnerability['function_code']}
+    Dòng: {vulnerability['line']}
+    Severity: {vulnerability['severity']}
+    Confidence: {vulnerability['confidence']}
+    CWE: {vulnerability['cwe']}
+    Nhiệm vụ:
+    1. Xác định đây là lỗi thật (true positive) hay false positive. Nếu là false positive, giải thích lý do.
+    2. Nếu là lỗi thật, đề xuất cách sửa cụ thể kèm mã nguồn mới.
+    """
 
 
 class PromptReader:
