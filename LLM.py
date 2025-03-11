@@ -123,16 +123,16 @@ class PromptGenerator:
         """Tạo prompt từ thông tin lỗ hổng."""
         return f"""
     Bạn là chuyên gia bảo mật Phát hiện lỗ hổng bảo mật:
-    Index: {vulnerability['index']}
-    File: {vulnerability['file']}
-    Check ID: {vulnerability['check_id']}
-    Hàm: {vulnerability['function_name']}
+    Index: {vulnerability.index}
+    File: {vulnerability.file}
+    Check ID: {vulnerability.check_id}
+    Hàm: {vulnerability.function_name}
     Code của hàm:
-    {vulnerability['function_code']}
-    Dòng: {vulnerability['line']}
-    Severity: {vulnerability['severity']}
-    Confidence: {vulnerability['confidence']}
-    CWE: {vulnerability['cwe']}
+    {vulnerability.function_code}
+    Dòng: {vulnerability.line}
+    Severity: {vulnerability.severity}
+    Confidence: {vulnerability.confidence}
+    CWE: {vulnerability.cwe}
     Nhiệm vụ:
     1. Xác định đây là lỗi thật (true positive) hay false positive. Nếu là false positive, giải thích lý do.
     2. Nếu là lỗi thật, đề xuất cách sửa cụ thể kèm mã nguồn mới.
@@ -254,20 +254,6 @@ class GeminiClient(BaseLLM):
             return False
     
     def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
-        """
-        Send prompt to Gemini API and get response
-        
-        Args:
-            prompt: Content of the prompt
-            max_tokens: Maximum tokens for the response
-            temperature: Temperature (creativity) of the response
-            
-        Returns:
-            Dict: Response from Gemini
-            
-        Raises:
-            LLMConnectionError: If there's an error connecting to the API
-        """
         try:
             # Ensure max_tokens doesn't exceed limit
             if max_tokens > self.MAX_TOKENS:
@@ -330,15 +316,6 @@ class GeminiClient(BaseLLM):
             raise LLMError(error_message)
     
     def process_response(self, response: Dict[str, Any]) -> str:
-        """
-        Process response from Gemini API
-        
-        Args:
-            response: Response from Gemini API
-            
-        Returns:
-            str: Processed response content
-        """
         try:
             # Extract content from Gemini response structure
             candidates = response.get('candidates', [{}])
@@ -369,16 +346,6 @@ class GeminiClient(BaseLLM):
             raise LLMResponseError(f"Failed to process response: {str(e)}")
     
     def generate_response(self, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
-        """
-        Utility function: Read prompt from file, send prompt, process and save response in one call
-        
-        Args:
-            max_tokens: Maximum tokens for the response
-            temperature: Temperature (creativity) of the response
-            
-        Returns:
-            Dict: Result indicating success or failure
-        """
         try:
             # Read prompt from file
             prompt = self.prompt_reader.read_prompt_from_file()
