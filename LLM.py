@@ -340,7 +340,7 @@ class GeminiClient(BaseLLM):
             logger.error(f"Error checking connection: {str(e)}")
             return False
     
-    def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+    def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> Dict[str, Any]:
         try:
             # Ensure max_tokens doesn't exceed limit
             if max_tokens > self.MAX_TOKENS:
@@ -432,7 +432,7 @@ class GeminiClient(BaseLLM):
             logger.error(f"Error processing response: {str(e)}")
             raise LLMResponseError(f"Failed to process response: {str(e)}")
     
-    def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+    def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> Dict[str, Any]:
         try:
             # Check connection before sending prompt
             if not self.validate_connection():
@@ -524,7 +524,7 @@ class OpenAIClient(BaseLLM):
             logger.error(f"Error checking connection: {str(e)}")
             return False
     
-    def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+    def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> Dict[str, Any]:
         """
         Send prompt to OpenAI API
         
@@ -635,7 +635,7 @@ class OpenAIClient(BaseLLM):
             logger.error(f"Error processing response: {str(e)}")
             raise LLMResponseError(f"Failed to process response: {str(e)}")
     
-    def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+    def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> Dict[str, Any]:
         """
         Generate response for a given prompt
         
