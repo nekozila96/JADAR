@@ -1,5 +1,6 @@
 import os
 import openai
+from pathlib import Path
 from repo import RepoCloner, JavaCodePreprocessor
 from semgrep import run_semgrep, analysis_semgrep
 from concurrent.futures import ThreadPoolExecutor
@@ -53,9 +54,11 @@ def main():
     print("\n--- Starting LLM Analysis ---")
     
     # Initialize the prompt manager and load data
+
+    template_path = Path(__file__).parent / "prompt_template.txt"
+    
     prompt_manager = PromptManager(chunk_size=15)  # Process 15 vulnerabilities per chunk
     report_manager = ReportManager()
-    
     try:
         # Load merged vulnerabilities data
         vulnerabilities = prompt_manager.load_data_from_json(merged_file)
