@@ -413,7 +413,7 @@ class GeminiClient(BaseLLM):
     
     # Class constants
     DEFAULT_MODEL = "gemini-1.5-pro"
-    MAX_TOKENS = 8192
+    MAX_TOKENS = 16384
     API_VERSION = "v1"
     
     def __init__(self, model: str = DEFAULT_MODEL):
