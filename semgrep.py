@@ -34,7 +34,8 @@ def run_semgrep(local_path: str, repo_name: str) -> bool:
     '--code',
     '--exclude', '**/.git/**', '--exclude', '**/node_modules/**', 
     '--exclude', '**/build/**', '--exclude', '**/target/**',  # Loại trừ thư mục không cần thiết
-    '--include', '*.java',  # Chỉ quét file Javar
+    '--include', '*.java',  # Chỉ quét file Java
+    '-j', '8',  # Sử dụng 8 thread
     '--json', f'--json-output={result_file}'
 ], check=True)
         print(f"Semgrep scan complete. Results saved to {result_file}")
