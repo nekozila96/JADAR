@@ -466,7 +466,7 @@ class GeminiClient(BaseLLM):
             logger.error(f"Error checking connection: {str(e)}")
             return False
     
-    def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+    def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> Dict[str, Any]:
         try:
             # Ensure max_tokens doesn't exceed limit
             if max_tokens > self.MAX_TOKENS:
