@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 import tqdm
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -617,16 +618,84 @@ class JavaCodePreprocessor:
         }
 
         # Cải tiến 1: Hàm trích xuất đoạn mã nguồn tốt hơn với context
-        def extract_better_snippet(start_line, end_line, context=2):
-            """Trích xuất đoạn mã nguồn với thêm context xung quanh"""
-            # Mở rộng vùng lấy mã nguồn ra thêm một số dòng trước và sau
+        def extract_better_snippet(start_line, end_line, context=2, annotate=False):
+            """
+            Trích xuất đoạn mã nguồn với context thông minh và chú thích.
+            
+            Args:
+                start_line: Dòng bắt đầu của đoạn mã chính.
+                end_line: Dòng kết thúc của đoạn mã chính.
+                context: Số dòng context trước và sau đoạn mã chính.
+                annotate: Thêm chú thích source/sink nếu True.
+                
+            Returns:
+                Đoạn mã nguồn có thêm context.
+            """
+            # Tính toán block code thông minh
+            # Luôn lấy ít nhất context dòng, nhiều nhất là 50% của file
             expanded_start = max(0, start_line - context)
             expanded_end = min(len(code_lines), end_line + context)
             
-            # Thêm số dòng vào đoạn mã để dễ theo dõi
+            # Mở rộng block để bao gồm toàn bộ cấu trúc điều khiển (if, for, while, try-catch)
+            # Tìm dòng bắt đầu của khối gần nhất
+            open_braces = 0
+            close_braces = 0
+            
+            # Mở rộng lên trên để tìm dòng bắt đầu của khối
+            for i in range(expanded_start, 0, -1):
+                line = code_lines[i]
+                if '{' in line:
+                    open_braces += 1
+                    # Nếu tìm thấy dòng bắt đầu khối (vd: if, for, method)
+                    if any(keyword in line.lower() for keyword in ["if", "for", "while", "try", "catch", "method", "void", "public", "private", "protected"]):
+                        if open_braces > close_braces:
+                            expanded_start = max(0, i - 1)  # Lấy thêm dòng trên để có ngữ cảnh
+                            break
+                if '}' in line:
+                    close_braces += 1
+            
+            # Mở rộng xuống dưới để tìm dòng kết thúc của khối
+            open_count = 0
+            for i in range(expanded_start, min(len(code_lines), expanded_end + 5)):
+                open_count += code_lines[i].count('{')
+                open_count -= code_lines[i].count('}')
+                if i >= expanded_end and open_count <= 0:
+                    expanded_end = i + 1  # Lấy nốt dòng kết thúc khối
+                    break
+            
+            # Đảm bảo không lấy quá nhiều dòng
+            max_lines = min(30, len(code_lines) // 3)  # Tối đa 30 dòng hoặc 1/3 file
+            if expanded_end - expanded_start > max_lines:
+                # Nếu đoạn quá dài, ưu tiên giữ nguyên phần giữa và cắt bớt hai đầu
+                excess = (expanded_end - expanded_start) - max_lines
+                additional_start = excess // 2
+                additional_end = excess - additional_start
+                expanded_start = max(0, expanded_start + additional_start)
+                expanded_end = min(len(code_lines), expanded_end - additional_end)
+            
+            # Thêm số dòng và highlight đoạn mã chính
             snippet_lines = []
+            
             for i in range(expanded_start, expanded_end):
-                snippet_lines.append(f"{i + 1}: {code_lines[i]}")
+                # Highlight dòng trong phạm vi chính
+                if start_line <= i < end_line:
+                    prefix = ">>> "  # Đánh dấu dòng code quan trọng
+                else:
+                    prefix = "    "
+                    
+                # Đảm bảo chỉ số dòng đúng với file gốc
+                line_number = i + 1
+                line_text = code_lines[i]
+                
+                # Thêm chú thích cho source/sink nếu cần
+                if annotate:
+                    if "source" in locals() and i == source_line:
+                        line_text += "  // SOURCE"
+                    elif "sink" in locals() and i == sink_line:
+                        line_text += "  // SINK"
+                        
+                snippet_lines.append(f"{prefix}{line_number}: {line_text}")
+            
             
             return "\n".join(snippet_lines)
         
@@ -655,7 +724,7 @@ class JavaCodePreprocessor:
                             end_of_declaration = i
                             break
                     
-                    code_snippet = extract_better_snippet(start_line, end_of_declaration + 1)
+                    code_snippet = extract_better_snippet(start_line, end_of_declaration + 1, context=3)
                     
                     data_flows.append({
                         "source": param.name,
@@ -770,17 +839,29 @@ class JavaCodePreprocessor:
                     if hasattr(call, 'position') and call.position:
                         sink_line = max(0, call.position.line - 1)
                         
-                        # Nếu source_position có giá trị và không quá xa sink
-                        if source_position and abs(source_position.line - call.position.line) < 20:
+                        if source_position and abs(source_position.line - call.position.line) < 30:
+                            # Nếu source và sink đủ gần nhau, trích xuất toàn bộ đoạn giữa chúng
                             source_line = max(0, source_position.line - 1)
-                            code_snippet = extract_better_snippet(source_line, sink_line + 1, context=1)
+                            
+                            # Trích xuất với annotate=True để đánh dấu source và sink
+                            code_snippet = extract_better_snippet(
+                                min(source_line, sink_line), 
+                                max(source_line, sink_line) + 1,
+                                context=3,
+                                annotate=True
+                            )
                         else:
-                            # Nếu không có source_position hoặc quá xa, lấy một đoạn context xung quanh sink
-                            code_snippet = extract_better_snippet(sink_line - 2, sink_line + 3, context=1)
-                    else:
-                        start_line = max(0, method.position.line - 1)
-                        end_line = min(len(code_lines), start_line + 7)  # Lấy đoạn dài hơn
-                        code_snippet = extract_better_snippet(start_line, end_line)
+                            # Nếu source/sink cách xa, trích xuất riêng
+                            code_snippet = extract_better_snippet(sink_line - 2, sink_line + 3, context=3)
+                            
+                            # Nếu có source_position, thêm cả đoạn code ở source
+                            if source_position:
+                                source_snippet = extract_better_snippet(
+                                    max(0, source_position.line - 2),
+                                    min(len(code_lines), source_position.line + 2),
+                                    context=2
+                                )
+                                code_snippet = source_snippet + code_snippet
                     
                     # Cải tiến 8: Phân loại nghiêm trọng dựa trên cả nguồn và đích
                     severity_level = "HIGH" if sink_type in ["SQL Injection", "Command Execution", "Path Traversal"] else "MEDIUM"
@@ -821,8 +902,7 @@ class JavaCodePreprocessor:
                                             e_line = min(len(code_lines), s_line + 3)
                                             
                                             # Cải tiến: thêm dấu phân cách rõ ràng
-                                            flow["code_snippet"] += "\n\n// Sink usage at line " + str(s_line + 1) + ":\n" + \
-                                                                  extract_better_snippet(s_line, e_line, context=0)
+                                            flow["code_snippet"] += extract_better_snippet(s_line, e_line, context=0)
                                             flow["end_line"] = e_line
             except Exception as e:
                 logging.debug(f"Error analyzing method call: {e}")
@@ -987,6 +1067,4 @@ class JavaCodePreprocessor:
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
         logging.info(f"Processed data saved to {output_path}")
-
-
 
