@@ -161,8 +161,8 @@ To determine if the code is vulnerable to IDOR, analyze whether it allows unauth
 ---------------------------------------------------------------------------------------------
 INITIAL ANALYSIS
 
-Analyze the code in chunk of infomation for potential remotely exploitable vulnerabilities:
-1. Identify all remote user input entry points (e.g., API endpoints, form submissions, chunk of infomation).
+Analyze the code in <file_code> tags for potential remotely exploitable vulnerabilities:
+1. Identify all remote user input entry points (e.g., API endpoints, form submissions). If not available, request the necessary context in the <lines of code>.
 2. Locate potential vulnerability sinks for:
     - Insecure Direct Object Reference (IDOR)
     - Any other OWASP Top 10 category vulnerability (Injection, Auth bypass, XSS, etc.)
@@ -181,35 +181,35 @@ OUTPUT STRUCTURE:
 This section should include all the following components:
 Formatting Instructions (IMPORTANT — MUST FOLLOW STRICTLY):
 ---------------------------------------------------------------------------------------------
-1.1 Analysis   
+1.1 Directory
+Include path to the vulnerable file
+Example: src/main/java/com/appsecco/dvja/example.java
+
+1.2 Vulnerability Types   
+Specify the type of vulnerability identified (e.g.,  SQL Injection, XSS, IDOR).
+
+1.3 Confidence Score   
+Provide a numeric confidence score  from  1 to 10 /10 (without reasoning) indicating how sure you are that this vulnerability exists in the code. A score of 10 means you are completely confident.
+If your proof of concept (PoC) exploit does not start with remote user input via remote networking calls such as remote HTTP, API, or RPC calls, set the confidence score to 6 or below.
+
+1.4 Analysis   
 Provide a line explaining the vulnerability that you just analysed.
 
-1.2 Proof of Concept (PoC)
+1.5 Vulnerability Code   
+Show the specific line(s) where the vulnerability occurs.(print out the codes lines)
+
+1.6 Proof of Concept (PoC)
 Include a PoC exploit or detailed exploitation steps specific to the analyzed code. Ensure that the PoC:
     - Is specific to the code you are analyzing.
     - Bypasses any security controls in the analyzed code path.
     - Demonstrates how the vulnerability can be exploited in practice.
 
-1.3 Remediation code:
-- Updated secure code snippet to patch vulnerability 
-
-1.4 Confidence Score   
-Provide a numeric confidence score  from  1 to 10 /10 (without reasoning) indicating how sure you are that this vulnerability exists in the code. A score of 10 means you are completely confident.
-If your proof of concept (PoC) exploit does not start with remote user input via remote networking calls such as remote HTTP, API, or RPC calls, set the confidence score to 6 or below.
-
-1.5 Vulnerability Types   
-Specify the type of vulnerability identified (e.g.,  SQL Injection, XSS, IDOR).
-
-1.6 Vulnerability Code   
-Show the specific line(s) where the vulnerability occurs.(print out the codes lines)
-
-1.7 Directory
-Include path to the vulnerable file
-Example: src/main/java/com/appsecco/dvja/example.java
+1.7 Remediation code:
+Updated secure code snippet to patch vulnerability 
 ---------------------------------------------------------------------------------------------
 
 Return your result inside a neat box using curly brackets ({{ and }}) before and after the output.
-Use strict format:  Analysis → PoC → Remediation code → Confidence Score → Vulnerability Types → Vulnerability Code → Directory.
+Use strict format: Directory → Vulnerability Types → Confidence Score → Analysis → Vulnerability Code → PoC → Remediation code.
 
 Key Guidelines for the AI:
 - Use 'None' for any aspect of the report that you lack the necessary information for.
@@ -219,7 +219,7 @@ Key Guidelines for the AI:
 - Clearly state Vulnerability Types and provide Context Code with exact line references.
 
 Reminder:
-- If PoC or Fix cannot be created due to lack of code, set it to `None`.
+- If PoC or Fix cannot be created due to lack of code, set it to 'None'.
 - Use exact field names and structure shown in the format above.
 - DO NOT include any markdown, explanations outside the box, or extra formatting.
 - Always return a single well-formed box output like shown.
@@ -306,9 +306,7 @@ Reminder:
             f"Vulnerability #{i+1}:\n{self.format_vulnerability_json(vuln)}"
             for i, vuln in enumerate(chunk)
         ])
-        
         return self.template.format(vulnerabilities=vulnerabilities_text)
-        
 
 class ReportManager:
     """Class responsible for managing and storing LLM interaction reports"""
@@ -338,7 +336,7 @@ class ReportManager:
         """
         try:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
-            filename = f"{model_name}_chunk{chunk_id}_{timestamp}.md"
+            filename = f"{model_name}_chunk{chunk_id}_{timestamp}.json"
             filepath = os.path.join(self.report_dir, filename)
             
             # Write response to file
@@ -368,11 +366,11 @@ class ReportManager:
             for file in report_files:
                 with open(file, 'r', encoding='utf-8') as f:
                     content = f.read()
-                    merged_content.append(f"## Report from {os.path.basename(file)}\n\n{content}\n\n")
+                    merged_content.append(content)
             
             output_path = os.path.join(self.report_dir, output_file)
             with open(output_path, 'w', encoding='utf-8') as f:
-                f.write("\n".join(merged_content))
+                f.write('\n'.join(merged_content))
                 
             logger.info(f"Merged reports saved to: {output_path}")
             return output_path
@@ -543,7 +541,7 @@ class GeminiClient(BaseLLM):
             logger.error(f"Error processing response: {str(e)}")
             raise LLMResponseError(f"Failed to process response: {str(e)}")
     
-    def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+    def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> Dict[str, Any]:
         try:
             # Check connection before sending prompt
             if not self.validate_connection():
@@ -635,7 +633,7 @@ class OpenAIClient(BaseLLM):
             logger.error(f"Error checking connection: {str(e)}")
             return False
     
-    def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+    def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> Dict[str, Any]:
         """
         Send prompt to OpenAI API
         
@@ -746,7 +744,7 @@ class OpenAIClient(BaseLLM):
             logger.error(f"Error processing response: {str(e)}")
             raise LLMResponseError(f"Failed to process response: {str(e)}")
     
-    def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.7) -> Dict[str, Any]:
+    def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> Dict[str, Any]:
         """
         Generate response for a given prompt
         
