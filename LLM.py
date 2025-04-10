@@ -161,8 +161,8 @@ To determine if the code is vulnerable to IDOR, analyze whether it allows unauth
 ---------------------------------------------------------------------------------------------
 INITIAL ANALYSIS
 
-Analyze the code in <file_code> tags for potential remotely exploitable vulnerabilities:
-1. Identify all remote user input entry points (e.g., API endpoints, form submissions). If not available, request the necessary context in the <lines of code>.
+Analyze the code in chunk of infomation for potential remotely exploitable vulnerabilities:
+1. Identify all remote user input entry points (e.g., API endpoints, form submissions, chunk of infomation).
 2. Locate potential vulnerability sinks for:
     - Insecure Direct Object Reference (IDOR)
     - Any other OWASP Top 10 category vulnerability (Injection, Auth bypass, XSS, etc.)
