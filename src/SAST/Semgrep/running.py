@@ -48,13 +48,12 @@ def run_semgrep(local_path: str, result_file: str) -> bool:
         # Chạy Semgrep để quét toàn bộ thư mục hiện tại
         subprocess.run([
             'semgrep',
-            '--config',  # Sử dụng các quy tắc tự động
+            '--config', 'auto',  # Sử dụng các quy tắc tự động
             '--exclude', '**/.git/**', 
             '--exclude', '**/node_modules/**',
             '--exclude', '**/build/**', 
             '--exclude', '**/target/**',
             '--include', '*.java',  # Chỉ quét file Java
-            '-j', '8',  # Sử dụng 8 thread
             '--json',
             '--output', result_file,  # Sử dụng đường dẫn đầy đủ cho file kết quả
             '.'  # Quét thư mục hiện tại
