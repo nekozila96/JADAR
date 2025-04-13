@@ -56,28 +56,115 @@ class VulnerabilityReport:
     def __init__(self):
         self.vulnerabilities = []
         self.owasp_categories = {}
+        
+    def _clean_json_block(self, block: str) -> str:
+        """Clean a JSON block by removing markdown code markers and extra whitespace while preserving content"""
+        # Remove ```json at the start and ``` at the end if present
+        if block.startswith('```json'):
+            block = block[7:]  # Remove ```json
+        if block.endswith('```'):
+            block = block[:-3]  # Remove ```
+        
+        # Remove leading/trailing whitespace but preserve internal formatting
+        block = block.strip()
+        
+        # Handle case where the block might be empty after cleaning
+        if not block:
+            return "{}"
+            
+        return block
+
+    def _extract_json_blocks(self, content: str) -> List[str]:
+        """Extract JSON blocks from content that contains markdown code blocks"""
+        blocks = []
+        current_block = []
+        in_json_block = False
+        
+        # Split content into lines for better processing
+        lines = content.splitlines()
+        
+        for line in lines:
+            stripped_line = line.strip()
+            
+            # Check for start of JSON block
+            if stripped_line == '```json':
+                if in_json_block:
+                    # Handle nested or invalid blocks
+                    current_block = []
+                in_json_block = True
+                continue
+                
+            # Check for end of JSON block
+            elif stripped_line == '```':
+                if in_json_block:
+                    block_content = '\n'.join(current_block)
+                    if block_content.strip():
+                        blocks.append(block_content)
+                    current_block = []
+                    in_json_block = False
+                continue
+                
+            # Collect lines within JSON block
+            if in_json_block:
+                current_block.append(line)
+                
+        # Handle case where the last block wasn't properly closed
+        if in_json_block and current_block:
+            block_content = '\n'.join(current_block)
+            if block_content.strip():
+                blocks.append(block_content)
+                
+        return blocks
 
     def load_json_file(self, filepath: str) -> None:
         """Load and parse vulnerabilities from a JSON file"""
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"File not found: {filepath}")
-            
+        
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
-            # Remove markdown code block markers if present
-            content = content.replace('```json', '').replace('```', '')
             
             try:
-                json_blocks = content.split('\n\n')
+                json_blocks = self._extract_json_blocks(content)
+                
                 for block in json_blocks:
                     if not block.strip():
                         continue
+                        
                     try:
-                        data = json.loads(block)
-                        vuln = Vulnerability(data)
-                        self.vulnerabilities.append(vuln)
-                    except json.JSONDecodeError:
-                        print(f"Warning: Could not parse JSON block: {block[:100]}...")
+                        # Clean the JSON block if needed
+                        clean_block = self._clean_json_block(block)
+                        data = json.loads(clean_block)
+                        
+                        # Handle case where block contains a "report" array
+                        if isinstance(data, dict) and "report" in data:
+                            for vuln_data in data["report"]:
+                                try:
+                                    vuln = Vulnerability(vuln_data)
+                                    self.vulnerabilities.append(vuln)
+                                except Exception as e:
+                                    print(f"Error processing vulnerability in report: {str(e)}")
+                                    print(f"Vulnerability data: {vuln_data}")
+                        else:
+                            # Handle single vulnerability case
+                            vuln = Vulnerability(data)
+                            self.vulnerabilities.append(vuln)
+                            
+                    except json.JSONDecodeError as je:
+                        # Provide more detailed error information
+                        print(f"Warning: Could not parse JSON block:")
+                        print(f"Block content (first 200 chars): {block[:200]}")
+                        print(f"Error position: line {je.lineno}, column {je.colno}")
+                        print(f"Error details: {str(je)}")
+                    except Exception as e:
+                        print(f"Error processing block: {str(e)}")
+                        print(f"Block content (first 200 chars): {block[:200]}")
+                
+                if not self.vulnerabilities:
+                    print(f"Warning: No valid vulnerabilities found in {filepath}")
+                else:
+                    print(f"Successfully loaded {len(self.vulnerabilities)} vulnerabilities from {filepath}")
+                    
             except Exception as e:
                 raise Exception(f"Error parsing JSON file {filepath}: {str(e)}")
 
@@ -243,37 +330,130 @@ class VulnerabilityReport:
             color: #111827;
             font-size: 24px;
         }}
+        .section-title {{
+            color: #111827;
+            font-size: 24px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }}
+        .count-title {{
+            color: #4b5563;
+            font-size: 18px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }}
         #vuln-list-container {{
-            background-color: #ffffff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            background-color: transparent;
+            padding: 0;
         }}
         #vuln-list {{
             list-style-type: none;
             padding: 0;
             margin: 0;
+            max-height: 70vh;
+            overflow-y: auto;
         }}
-        #vuln-list li {{
-            padding: 12px 15px;
+        .vuln-card {{
+            background-color: #ffffff;
             border: 1px solid #e5e7eb;
-            border-radius: 6px;
-            margin-bottom: 8px;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            position: relative;
         }}
-        #vuln-list li:hover {{
-            background-color: #f3f4f6;
+        .vuln-card:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-color: #d1d5db;
         }}
-        #vuln-list li.active {{
-            background-color: #e5e7eb;
-            font-weight: 500;
+        .vuln-number {{
+            position: absolute;
+            top: 20px;
+            left: -30px;
+            background-color: #4b5563;
+            color: #ffffff;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+        }}
+        .vuln-type {{
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 16px;
+            margin: 0;
+            padding-left: 10px;
+        }}
+        .vuln-file {{
+            font-size: 13px;
+            color: #4b5563;
+            word-break: break-all;
+            margin: 0;
+            padding-left: 10px;
+        }}
+        .vuln-description {{
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.5;
+            margin: 0;
+            padding-left: 10px;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
         #vuln-detail-container {{
             background-color: #ffffff;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }}
+        /* Back Button Styling */
+        #back-to-list-btn {{
+            background-color: #e5e7eb;
+            color: #374151;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            margin-right: 15px;
+            transition: background-color 0.2s;
+        }}
+        #back-to-list-btn:hover {{
+            background-color: #d1d5db;
+        }}
+        #back-to-list-btn svg {{
+            width: 16px;
+            height: 16px;
+            margin-right: 6px;
+            stroke: currentColor;
+        }}
+        .detail-header {{
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 10px;
+        }}
+        #vuln-detail-title {{
+            margin: 0;
+            font-size: 18px;
+            color: #111827;
+            flex-grow: 1;
         }}
         #vuln-detail-table {{
             width: 100%;
@@ -306,14 +486,19 @@ class VulnerabilityReport:
     <div class="main">
         <h1 id="main-title">Select an OWASP category to view vulnerabilities</h1>
         <div id="vuln-list-container" style="display: none;">
-            <h2 id="vuln-list-title"></h2>
-            <ul id="vuln-list"></ul>
+            <h2 id="category-title" class="section-title"></h2>
+            <h3 id="vuln-count-title" class="count-title"></h3>
+            <div id="vuln-list"></div>
         </div>
         <div id="vuln-detail-container" style="display: none;">
-            <div style="margin-bottom: 20px;">
-                <button onclick="goBackToList()" style="padding: 8px 16px; background: #e5e7eb; border: none; border-radius: 4px; cursor: pointer;">
-                    Back to List
+            <div class="detail-header">
+                <button id="back-to-list-btn" onclick="goBackToList()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    Back
                 </button>
+                <h2 id="vuln-detail-title">Vulnerability Details</h2>
             </div>
             <table id="vuln-detail-table">
                 <tbody></tbody>
@@ -337,19 +522,23 @@ class VulnerabilityReport:
         document.getElementById('main-title').style.display = 'none';
         document.getElementById('vuln-detail-container').style.display = 'none';
         document.getElementById('vuln-list-container').style.display = 'block';
-        document.getElementById('vuln-list-title').textContent = category + ' Vulnerabilities';
+        document.getElementById('category-title').textContent = 'Vulnerabilities for ' + category;
+        document.getElementById('vuln-count-title').textContent = 'Vulnerability List (' + vulns.length + ' vulnerabilities)';
         
         // Show vulnerabilities
-        const vulnList = document.getElementById('vuln-list');
-        vulnList.innerHTML = '';
+        const vulnListDiv = document.getElementById('vuln-list');
+        vulnListDiv.innerHTML = '';
         vulns.forEach((vuln, index) => {{
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <div><strong>${{vuln.type}}</strong></div>
-                <div style="color: #666">${{vuln.file}}</div>
+            const card = document.createElement('div');
+            card.className = 'vuln-card';
+            card.innerHTML = `
+                <div class="vuln-number">${{index + 1}}</div>
+                <div class="vuln-type">${{vuln.type}}</div>
+                <div class="vuln-file">${{vuln.file}}</div>
+                <div class="vuln-description">${{vuln.description}}</div>
             `;
-            li.onclick = () => showVulnDetails(category, index);
-            vulnList.appendChild(li);
+            card.onclick = () => showVulnDetails(category, index);
+            vulnListDiv.appendChild(card);
         }});
     }}
     
@@ -364,6 +553,7 @@ class VulnerabilityReport:
             <tr><th>Type</th><td>${{vuln.type}}</td></tr>
             <tr><th>File</th><td>${{vuln.file}}</td></tr>
             <tr><th>Description</th><td>${{vuln.description}}</td></tr>
+            <tr><th>Confidence</th><td>${{vuln.confidence}}</td></tr>
             <tr><th>Code</th><td><pre>${{vuln.code}}</pre></td></tr>
             <tr><th>PoC</th><td><pre>${{vuln.poc}}</pre></td></tr>
             <tr><th>Remediation</th><td><pre>${{vuln.remediation}}</pre></td></tr>
