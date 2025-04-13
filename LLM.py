@@ -336,7 +336,7 @@ class ReportManager:
         """
         try:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
-            filename = f"{model_name}_chunk{chunk_id}_{timestamp}.md"
+            filename = f"{model_name}_chunk{chunk_id}_{timestamp}.json"
             filepath = os.path.join(self.report_dir, filename)
             
             # Write response to file
