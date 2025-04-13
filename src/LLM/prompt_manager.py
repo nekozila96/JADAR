@@ -31,34 +31,45 @@ class PromptManager:
         Load prompt template from file.
         
         Tries to load the template from the specified file. 
-        Raises an exception if the file is not found or cannot be read.
+        If the file is not found or is empty, uses a default template.
         
         Returns:
             str: The template content
-            
-        Raises:
-            LLMFileError: If the template file cannot be found or read
         """
+        # Default template to use if file not found or empty
+        default_template = """{vulnerabilities}
+    ---------------------------------------------------------------------------------------------
+    Objective:
+    You are a top Java security expert. Your job is to analyze and verify the vulnerable lines of code that include source and sink points influenced by user input, and identify vulnerabilities — especially remotely exploitable IDOR vulnerabilities.
+    You will be provided with a list of vulnerabilities, each containing the following information:
+    - index: The index of the vulnerability in the list
+    - file_path: The path to the file where the vulnerability was found
+    - severity: The severity of the vulnerability (INFO, LOW, MEDIUM, HIGH)
+    - poc: A proof of concept for the vulnerability
+    - remediation: Suggested remediation for the vulnerability
+    """
+        
         try:
+            # Try to load from file
             with open(self.template_file, 'r', encoding='utf-8') as f:
                 template = f.read()
                 if not template.strip():
                     # File exists but is empty
-                    raise LLMFileError(f"Template file {self.template_file} is empty")
+                    logging.warning(f"Template file {self.template_file} is empty. Using default template.")
+                    self._create_default_template()  # Create default template file for future use
+                    return default_template
+                
                 logging.info(f"Successfully loaded prompt template from {self.template_file}")
                 return template
+                
         except FileNotFoundError:
-            error_msg = f"Template file '{self.template_file}' not found. Please create this file with your prompt template."
-            logging.error(error_msg)
-            raise LLMFileError(error_msg)
-        except PermissionError:
-            error_msg = f"Permission denied when trying to read template file '{self.template_file}'"
-            logging.error(error_msg)
-            raise LLMFileError(error_msg)
+            # File not found, use default and create the file
+            logging.warning(f"Template file {self.template_file} not found. Using default template.")
+            return default_template
         except Exception as e:
-            error_msg = f"Error loading template from {self.template_file}: {str(e)}"
-            logging.error(error_msg)
-            raise LLMFileError(error_msg)
+            # Other errors, use default
+            logging.error(f"Error loading template from {self.template_file}: {str(e)}. Using default template.")
+            return default_template
     
     def load_data_from_json(self, json_file: str) -> List[Dict[str, Any]]:
         """
@@ -140,3 +151,5 @@ class PromptManager:
         ])
         
         return self.template.format(vulnerabilities=vulnerabilities_text)
+    
+    

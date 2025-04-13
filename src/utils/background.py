@@ -17,15 +17,40 @@ def display_header(title: str):
     print(f"{title:^60}")
     print("=" * 60 + "\n")
 
-def check_api_keys() -> Tuple[bool, bool]:
+def check_api_keys(prompt_for_missing: bool = False) -> Tuple[bool, bool]:
     """
     Check if API keys are available in environment variables
+    
+    Args:
+        prompt_for_missing: If True, prompt user to input missing API keys
     
     Returns:
         Tuple[bool, bool]: (gemini_available, openai_available)
     """
     gemini_key = os.getenv("GEMINI_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
+    
+    # Prompt for missing API keys if requested
+    if prompt_for_missing:
+        if not gemini_key:
+            print("\nGEMINI_API_KEY not found in environment variables.")
+            key_input = input("Would you like to enter a Gemini API key now? (y/n): ").strip().lower()
+            if key_input == 'y':
+                gemini_key = input("Enter your Gemini API key: ").strip()
+                if gemini_key:
+                    # Store temporarily for this session
+                    os.environ["GEMINI_API_KEY"] = gemini_key
+                    print("Gemini API key stored for this session.")
+        
+        if not openai_key:
+            print("\nOPENAI_API_KEY not found in environment variables.")
+            key_input = input("Would you like to enter an OpenAI API key now? (y/n): ").strip().lower()
+            if key_input == 'y':
+                openai_key = input("Enter your OpenAI API key: ").strip()
+                if openai_key:
+                    # Store temporarily for this session
+                    os.environ["OPENAI_API_KEY"] = openai_key
+                    print("OpenAI API key stored for this session.")
     
     return bool(gemini_key), bool(openai_key)
 
@@ -41,17 +66,25 @@ def select_model(force_interactive: bool = False) -> Tuple[str, str]:
             model_type: 'gemini' or 'openai'
             model_name: Specific model name
     """
-    # Check available API keys
-    gemini_available, openai_available = check_api_keys()
+    # Check available API keys with option to input them
+    gemini_available, openai_available = check_api_keys(prompt_for_missing=True)
+    
+    # If no API keys available after prompting, exit
+    if not gemini_available and not openai_available:
+        print("\nNo API keys available. Please set GEMINI_API_KEY or OPENAI_API_KEY in your environment.")
+        print("You can also add these to your .env file.")
+        if input("Continue without API keys? (y/n): ").strip().lower() != 'y':
+            print("Exiting program...")
+            sys.exit(0)
     
     # If only one API is available and not forcing interactive mode, auto-select it
     if not force_interactive:
         if gemini_available and not openai_available:
             logger.info("Only Gemini API key found. Auto-selecting Gemini.")
-            return 'gemini', LLMConfig.GEMINI_DEFAULT_MODEL
+            return 'gemini', LLMConfig.GEMINI_MODEL_2
         elif openai_available and not gemini_available:
             logger.info("Only OpenAI API key found. Auto-selecting OpenAI.")
-            return 'openai', LLMConfig.OPENAI_DEFAULT_MODEL
+            return 'openai', LLMConfig.OPENAI_MODEL_1
     
     # Interactive selection
     while True:
