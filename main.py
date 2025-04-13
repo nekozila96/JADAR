@@ -1,13 +1,11 @@
 import os
 import openai
-import time
 from repo import RepoCloner, JavaCodePreprocessor
 from semgrep import run_semgrep, analysis_semgrep
 from concurrent.futures import ThreadPoolExecutor
 from merge_file import merge_repo_semgrep
 from LLM import *
-from md_to_html_processor import parse_md_report, generate_html_report
-import webbrowser  # Import webbrowser module to open HTML files
+from html_report import *
 
 def main():
     repo_url = input("Enter the URL of the repository: ")
@@ -116,7 +114,7 @@ def main():
             if gemini_client:
                 print(f"Sending chunk {chunk_num} to Gemini...")
                 try:
-                    gemini_response = gemini_client.generate_response(prompt)
+                    gemini_response = gemini_client.generate_response(prompt, temperature=0.3)
                     
                     if gemini_response["success"]:
                         report_path = report_manager.save_report(
@@ -157,27 +155,36 @@ def main():
                 print("Waiting 5 seconds before processing next chunk...")
                 time.sleep(5)
         
-        # Create merged reports and generate HTML
-        html_reports = []  # Track generated HTML reports
-        
+        # Create merged reports
         if gemini_reports:
             gemini_merged = report_manager.merge_reports(
                 gemini_reports, 
-                f"{repo_name}_gemini_analysis.md"
+                f"{repo_name}_gemini_analysis.json"
             )
             print(f"\nMerged Gemini reports saved to {gemini_merged}")
             
-            # Generate HTML report from Gemini MD
-            try:
-                with open(gemini_merged, 'r', encoding='utf-8') as f_md:
-                    md_content = f_md.read()
-                parsed_data = parse_md_report(md_content)
-                html_output = os.path.join("reports", f"{repo_name}_gemini_report.html")
-                generate_html_report(parsed_data, html_output, f"Gemini Security Report - {repo_name}")
-                print(f"Generated Gemini HTML report: {html_output}")
-                html_reports.append(html_output)  # Add to list of reports
-            except Exception as e:
-                print(f"Error generating Gemini HTML report: {e}")
+            # Generate HTML report from Gemini merged report
+            report = VulnerabilityReport()
+    
+            # Load JSON file (only one file as requested)
+            json_file = gemini_merged
+            
+            if os.path.exists(gemini_merged):
+                try:
+                    report.load_json_file(gemini_merged)
+                except Exception as e:
+                    print(f"Lỗi khi load file {gemini_merged}: {str(e)}")
+                    return
+            else:
+                print(f"Không tìm thấy file {gemini_merged}")
+                return
+            
+            # Group vulnerabilities by OWASP category
+            report.group_by_owasp()
+            
+            # Generate HTML report
+            report.generate_html(output_file=f"{repo_name}_gemini_report.html")
+            print("Report generated successfully:", f"{repo_name}_gemini_report.html")
         
         if openai_reports:
             openai_merged = report_manager.merge_reports(
@@ -185,22 +192,9 @@ def main():
                 f"{repo_name}_openai_analysis.md"
             )
             print(f"Merged OpenAI reports saved to {openai_merged}")
-            
-            # Generate HTML report from OpenAI MD
-            try:
-                with open(openai_merged, 'r', encoding='utf-8') as f_md:
-                    md_content = f_md.read()
-                parsed_data = parse_md_report(md_content)
-                html_output = os.path.join("reports", f"{repo_name}_openai_report.html")
-                generate_html_report(parsed_data, html_output, f"OpenAI Security Report - {repo_name}")
-                print(f"Generated OpenAI HTML report: {html_output}")
-                html_reports.append(html_output)  # Add to list of reports
-            except Exception as e:
-                print(f"Error generating OpenAI HTML report: {e}")
         
         print("\nLLM analysis completed.")
-        
-
+    
     except LLMFileError as e:
         print(f"File error during LLM processing: {str(e)}")
     except Exception as e:
@@ -210,4 +204,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
