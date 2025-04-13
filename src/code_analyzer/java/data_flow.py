@@ -4,8 +4,8 @@ Module chịu trách nhiệm phân tích luồng dữ liệu trong mã Java.
 import logging
 import javalang
 from typing import Any, Dict, List, Optional, Set
-from src.code_analyzer.java.utils import extract_better_snippet
-from src.code_analyzer.java.sources_sink import SOURCES, SINK
+from .utils import extract_better_snippet
+from .sources_sink import SOURCES, SINK
 
 
 class DataFlowAnalyzer:
@@ -84,14 +84,11 @@ class DataFlowAnalyzer:
                     )
                     
                     data_flows.append({
-                        "source": param.name,
+                        "source -> sink": f"{param.name} → {method.name}",
                         "source_type": param_type,
-                        "sink": method.name,  # Tham số được dùng trong method
                         "sink_class": class_name,
-                        "code_snippet": code_snippet,
-                        "start_line": start_line + 1,
-                        "end_line": end_of_declaration + 2,
-                        "confidence": 0.6  # Điểm tin cậy mặc định cho tham số
+                        "start_line -> end_line": f"{start_line + 1} → {end_of_declaration + 2}",
+                        "code_snippet": code_snippet
                     })
 
         # Duyệt qua các lệnh gán trong phương thức
@@ -130,15 +127,12 @@ class DataFlowAnalyzer:
                                 code_snippet = extract_better_snippet(code_lines, start_line, end_line)
                             
                             data_flows.append({
-                                "source": target_name,
+                                "source -> sink": f"{target_name} → None",
                                 "source_type": self.sources[method_name],
                                 "source_method": method_name,
-                                "sink": None,  # Sẽ được cập nhật nếu biến được sử dụng làm sink
                                 "sink_class": None,
-                                "code_snippet": code_snippet,
-                                "start_line": start_line + 1,
-                                "end_line": end_line,
-                                "confidence": 0.7  # Mức độ tin cậy cao hơn cho nguồn trực tiếp
+                                "start_line -> end_line": f"{start_line + 1} → {end_line}",
+                                "code_snippet": code_snippet
                             })
             except Exception as e:
                 logging.debug(f"Error analyzing assignment: {e}")
@@ -166,7 +160,7 @@ class DataFlowAnalyzer:
                     source_type = "Unknown Source"
                     source_method = None
                     source_position = None
-                    confidence_score = 0.5  # Điểm tin cậy mặc định
+
 
                     # Tìm kiếm source trong các arguments và gán biến liên quan
                     if call.arguments:
@@ -178,7 +172,6 @@ class DataFlowAnalyzer:
                                 source_type = source_info["source"]
                                 source_method = source_info.get("method", "unknown")
                                 source_position = source_info.get("position")
-                                confidence_score = 0.8  # Tìm thấy source-sink rõ ràng
                                 break
                             # Kiểm tra argument là lời gọi phương thức source
                             elif isinstance(arg, javalang.tree.MethodInvocation):
@@ -188,14 +181,12 @@ class DataFlowAnalyzer:
                                     source_method = arg.member
                                     if hasattr(arg, 'position'):
                                         source_position = arg.position
-                                    confidence_score = 0.9  # Source được dùng trực tiếp trong sink
                                     break
                             # Kiểm tra tham số từ phương thức
                             elif hasattr(arg, 'value') and arg.value in parameter_sources:
                                 source_var = arg.value
                                 source_type = parameter_sources[arg.value]
                                 source_method = "parameter"
-                                confidence_score = 0.7  # Tham số trực tiếp vào sink
                                 break
 
                     # Trích xuất code snippet từ source đến sink
@@ -243,19 +234,11 @@ class DataFlowAnalyzer:
                         severity_level = "CRITICAL"
 
                     flow_data = {
-                        "source": source_var or "unknown",
-                        "source_type": source_type,
-                        "source_method": source_method,
-                        "sink": call.member,
-                        "sink_type": sink_type,
-                        "sink_severity": sink_severity,
-                        "sink_class": call.qualifier or class_name,
                         "flow_path": f"{source_var or 'unknown'} → {call.member}",
                         "severity": severity_level,
                         "code_snippet": code_snippet,
                         "start_line": (source_position.line if source_position else (sink_line - 2)) + 1,
-                        "end_line": sink_line + 3,
-                        "confidence": confidence_score
+                        "end_line": (source_position.line if source_position else sink_line + 3) + 1
                     }
                     data_flows.append(flow_data)
 
@@ -271,7 +254,6 @@ class DataFlowAnalyzer:
                                         flow["sink_severity"] = sink_severity
                                         flow["flow_path"] = f"{arg.value} → {call.member}"
                                         flow["severity"] = severity_level
-                                        flow["confidence"] = max(flow.get("confidence", 0.5), 0.6)  # Tăng độ tin cậy
                                         
                                         # Thêm đoạn mã tại điểm sink vào code_snippet
                                         if hasattr(call, 'position') and call.position:
@@ -296,7 +278,6 @@ class DataFlowAnalyzer:
                     sink_type = "Command Execution" if constructor.type.name == "ProcessBuilder" else "Path Traversal"
                     source_var = None
                     source_type = "Unknown Source"
-                    confidence_score = 0.4  # Điểm tin cậy cho constructor
                     
                     if constructor.arguments:
                         for arg in constructor.arguments:
@@ -304,12 +285,10 @@ class DataFlowAnalyzer:
                                 source_var = arg.value
                                 source_info = variables[arg.value]
                                 source_type = source_info["source"]
-                                confidence_score = 0.7  # Tăng độ tin cậy khi tìm thấy biến nguồn
                                 break
                             elif hasattr(arg, 'value') and arg.value in parameter_sources:
                                 source_var = arg.value
                                 source_type = parameter_sources[arg.value]
-                                confidence_score = 0.6  # Tham số được sử dụng
                                 break
                     
                     # Xác định mức độ nghiêm trọng dựa trên loại constructor và nguồn
@@ -327,18 +306,14 @@ class DataFlowAnalyzer:
                     code_snippet = extract_better_snippet(code_lines, start_line, end_line)
                     
                     data_flows.append({
-                        "source": source_var or "unknown",
+                        "source -> sink": f"{source_var or 'unknown'} → new {constructor.type.name}",
                         "source_type": source_type,
-                        "sink": f"new {constructor.type.name}",
                         "sink_type": sink_type,
                         "sink_class": class_name,
                         "sink_severity": "HIGH" if sink_type == "Command Execution" else "MEDIUM",
-                        "flow_path": f"{source_var or 'unknown'} → new {constructor.type.name}",
                         "severity": severity,
-                        "code_snippet": code_snippet,
-                        "start_line": start_line + 1,
-                        "end_line": end_line,
-                        "confidence": confidence_score
+                        "start_line -> end_line": f"{start_line + 1} → {end_line}",
+                        "code_snippet": code_snippet
                     })
             except Exception as e:
                 logging.debug(f"Error analyzing constructor: {e}")

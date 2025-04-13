@@ -11,11 +11,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 
-from src.code_analyzer.java.config import MAX_FILE_SIZE_MB, LRU_CACHE_SIZE
-from src.code_analyzer.java.utils import (remove_comments, normalize_whitespace, 
+from .config import MAX_FILE_SIZE_MB, LRU_CACHE_SIZE
+from .utils import (remove_comments, normalize_whitespace, 
                     add_missing_semicolons, find_block_start,
                     find_block_end, complete_block, extract_better_snippet)
-from src.code_analyzer.java.data_flow import DataFlowAnalyzer
+from .data_flow import DataFlowAnalyzer
 
 class JavaCodePreprocessor:
     """
