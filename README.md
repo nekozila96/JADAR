@@ -8,5 +8,6 @@ pip install -r requirements.txt
 
 
 ## Usage
+Step 1: git clone -b test_05 https://github.com/appsecco/dvja.git
 Step 1: semgrep login then sign in according to the github/gitlab account
 Step 2: python main.py
