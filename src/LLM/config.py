@@ -2,6 +2,7 @@ import os
 import logging
 from pathlib import Path
 
+
 # Thiết lập logging
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +28,7 @@ class LLMConfig:
     GEMINI_MODEL_1 = "gemini-1.5-pro"
     GEMINI_MODEL_2 = "gemini-2.0-flash"
     GEMINI_MODEL_3 = "gemini-1.5-pro"
+    GEMINI_DEFAULT_MODEL = "gemini-2.0-flash"  # Added default model constant
     
     GEMINI_MAX_TOKENS = 8192
     GEMINI_API_VERSION = "v1"
@@ -34,6 +36,7 @@ class LLMConfig:
     # OpenAI Configuration
     OPENAI_MODEL_1 = "gpt-3.5-turbo"
     OPENAI_MODEL_2 = "gpt-4o"   
+    OPENAI_DEFAULT_MODEL = "gpt-4o"  # Added default model constant
     OPENAI_MAX_TOKENS = 8192
     
     # Common LLM configuration

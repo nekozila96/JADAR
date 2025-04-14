@@ -34,53 +34,29 @@ class VulnerabilityAnalyzer:
         self.prompt_manager = PromptManager()
         self.report_manager = ReportManager()
         
+        # Initialize llm_client to None as a fallback
+        self.llm_client = None
+        self.model_type = model_type.lower()
+        
         # Select model based on model_type
-        if model_type == "gemini":
-            model = model_name or LLMConfig.GEMINI_MODEL_2
-            self.llm_client = GeminiClient(model=model, report_manager=self.report_manager)
-            self.model_type = "gemini"
-        else:
+        model = model_name
+        
+        if self.model_type == "gemini":
+            model = model_name or LLMConfig.GEMINI_DEFAULT_MODEL
+            self.llm_client = GeminiClient(model=model)
+        elif self.model_type == "openai":
             model = model_name or LLMConfig.OPENAI_MODEL_2
-            self.llm_client = OpenAIClient(model=model, report_manager=self.report_manager)
-            self.model_type = "openai"
+            self.llm_client = OpenAIClient(model=model)
+        else:
+            # Add a fallback or raise an error for unsupported model types
+            raise ValueError(f"Unsupported model type: {model_type}. Use 'gemini' or 'openai'.")
             
-        logging.info(f"Initialized VulnerabilityAnalyzer with {model_type} ({model})")
+        logging.info(f"Initialized VulnerabilityAnalyzer with {self.model_type} ({model})")
         
         # For storing reports
         self.report_files = []
         self.first_run = True
     
-    def test_llm(self) -> bool:
-        """Test LLM with a simple prompt to verify it's working"""
-        logging.info("Testing LLM functionality...")
-        
-        test_prompt = """Please analyze the following test vulnerability:
-
-{
-  "index": "TEST-001",
-  "file_path": "test/Example.java",
-  "severity": "HIGH",
-  "confidence": "HIGH",
-  "code": "public String getUserData(String userId) { return userRepository.findById(userId); }"
-}
-
-This is a test to verify you're operational. Provide a brief analysis.
-"""
-        
-        response = self.llm_client.generate_response(test_prompt)
-        
-        if response["success"]:
-            logging.info("LLM test successful")
-            report_file = self.report_manager.save_report(
-                response["content"],
-                0,  # Chunk 0 = test
-                f"{self.model_type}_test"
-            )
-            self.report_files.append(report_file)
-            return True
-        else:
-            logging.error(f"LLM test failed: {response['error']}")
-            return False
     
     def process_chunks(self, chunks: List[List[Dict[str, Any]]]) -> bool:
         """
@@ -105,20 +81,45 @@ This is a test to verify you're operational. Provide a brief analysis.
                 # This is now handled by the prompt template
                 self.first_run = False
             
-            # Send to LLM with retry capability
-            response = self.llm_client.retry_with_backoff(prompt)
+            try:
+                # Gọi API khác nhau dựa trên loại model
+                if self.model_type == "openai":
+                    # Đối với OpenAI, sử dụng retry_with_backoff
+                    response = self.llm_client.retry_with_backoff(
+                        prompt=prompt,
+                        max_tokens=None,
+                        temperature=LLMConfig.DEFAULT_TEMPERATURE
+                    )
+                else:
+                    # Đối với Gemini hoặc các model khác, sử dụng generate_response trực tiếp
+                    raw_response = self.llm_client.generate_response(
+                        prompt=prompt,
+                        max_tokens=None,
+                        temperature=LLMConfig.DEFAULT_TEMPERATURE
+                    )
+                    # Định dạng lại response để phù hợp với cấu trúc expected
+                    response = {
+                        "success": raw_response.get("success", True),
+                        "content": self.llm_client.process_response(raw_response) if "raw_response" not in raw_response else raw_response.get("content"),
+                        "error": raw_response.get("error", None)
+                    }
+                
+                # Xử lý kết quả
+                if response.get("success", False) and response.get("content"):
+                    report_file = self.report_manager.save_report(
+                        response["content"], 
+                        i+1,
+                        self.model_type
+                    )
+                    self.report_files.append(report_file)
+                    success_count += 1
+                else:
+                    error_msg = response.get("error", "Unknown error")
+                    logging.error(f"Failed to process chunk {i+1}: {error_msg}")
             
-            if response["success"]:
-                report_file = self.report_manager.save_report(
-                    response["content"], 
-                    i+1,
-                    self.model_type
-                )
-                self.report_files.append(report_file)
-                success_count += 1
-            else:
-                logging.error(f"Failed to process chunk {i+1}: {response['error']}")
-        
+            except Exception as e:
+                logging.error(f"Failed to process chunk {i+1}: {str(e)}")
+            
         return success_count > 0
     
     def analyze(self, input_file: str, test_first: bool = True) -> bool:
@@ -132,13 +133,7 @@ This is a test to verify you're operational. Provide a brief analysis.
         Returns:
             bool: True if analysis completed successfully
         """
-        # Step 1: Test LLM functionality if requested
-        if test_first:
-            if not self.test_llm():
-                logging.error("Aborting analysis due to LLM test failure")
-                return False
-        
-        # Step 2: Load and process vulnerability data
+        # Step 1: Load and process vulnerability data
         try:
             logging.info(f"Loading vulnerability data from {input_file}")
             vulnerabilities = self.prompt_manager.load_data_from_json(input_file)
@@ -171,7 +166,7 @@ This is a test to verify you're operational. Provide a brief analysis.
         logging.info(f"Complete analysis saved to {merged_file}")
         return merged_file
 
-def run_java_analyzer(repo_path, reports_dir, repo_name):
+def run_java_analyzer(repo_path, reports_dir, repo_name, output_file):
     """
     Chạy phân tích mã Java và lưu kết quả.
     
@@ -179,9 +174,10 @@ def run_java_analyzer(repo_path, reports_dir, repo_name):
         repo_path: Đường dẫn đến repository
         reports_dir: Thư mục lưu báo cáo
         repo_name: Tên repository
+        output_file: Đường dẫn đầy đủ của file kết quả
     
     Returns:
-        Bool: True nếu thành công, False nếu thất bại
+        bool: True nếu thành công, False nếu thất bại
     """
     try:
         print(f"\n[+] Bắt đầu phân tích mã Java trong {repo_name}...")
@@ -196,21 +192,19 @@ def run_java_analyzer(repo_path, reports_dir, repo_name):
             print("[-] Không tìm thấy file Java nào hoặc quá trình phân tích thất bại.")
             return False
         
-        # Tạo tên file kết quả với timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        java_result_file = os.path.join(reports_dir, f"{repo_name}_java_analysis_{timestamp}.json")
-        
         # Lưu kết quả
-        preprocessor.save_to_json(java_result_file, results)
+        preprocessor.save_to_json(output_file, results)
         
-        # Tạo báo cáo tổng hợp dễ đọc
-        summary_file = os.path.join(reports_dir, f"{repo_name}_java_summary_{timestamp}.json")
-
         print(f"[+] Đã hoàn thành phân tích mã Java. Kết quả lưu tại:")
-        print(f"    - Chi tiết: {java_result_file}")
-        print(f"    - Tổng hợp: {summary_file}")
-        return True
+        print(f"    - {output_file}")
         
+        # Đảm bảo file tồn tại và có dữ liệu
+        if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+            return True
+        else:
+            print(f"[-] File kết quả không được tạo hoặc rỗng: {output_file}")
+            return False
+            
     except Exception as e:
         print(f"[-] Lỗi khi phân tích mã Java: {e}")
         logging.exception("Java analysis error")
@@ -223,7 +217,7 @@ def create_llm_client(model_type: str, model_name: Optional[str] = None, report_
     Args:
         model_type: Type of model ('gemini' or 'openai')
         model_name: Specific model name
-        report_manager: ReportManager instance for handling reports
+        report_manager: ReportManager instance for handling reports (only used for OpenAI)
     
     Returns:
         BaseLLM: An instance of the appropriate LLM client
@@ -236,118 +230,203 @@ def create_llm_client(model_type: str, model_name: Optional[str] = None, report_
         
     if model_type.lower() == 'gemini':
         logger.info(f"Creating Gemini client with model: {model_name}")
-        return GeminiClient(model=model_name, report_manager=report_manager)
+        return GeminiClient(model=model_name)  # GeminiClient không cần report_manager
     elif model_type.lower() == 'openai':
         logger.info(f"Creating OpenAI client with model: {model_name}")
-        return OpenAIClient(model=model_name, report_manager=report_manager)
+        return OpenAIClient(model=model_name, report_manager=report_manager)  # OpenAIClient có thể cần report_manager
     else:
         raise ValueError(f"Unsupported model type: {model_type}. Use 'gemini' or 'openai'.")
 
 
 def main():
-    # Clone public repository
+    """
+    Main function to orchestrate the vulnerability analysis process.
+    """
+    repo_url, repo_name, repo_path = clone_repository()
+    if not repo_path:
+        return
+
+    reports_dir = create_reports_directory(repo_path)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_paths = initialize_file_paths(reports_dir, repo_name, timestamp)
+
+    print("\n===== RUNNING SECURITY SCANNERS =====")
+    semgrep_output_file = run_semgrep_analysis(repo_path, file_paths)
+    java_output_file = run_java_analysis(repo_path, reports_dir, repo_name, file_paths)
+
+    llm_input_file, analysis_type = determine_llm_input(java_output_file, semgrep_output_file, file_paths)
+    if not llm_input_file:
+        return
+
+    run_llm_analysis(llm_input_file, analysis_type, reports_dir, repo_name, timestamp)
+
+
+def clone_repository():
+    """
+    Clone the repository and return its details.
+    """
     repo_url = input("Enter the repository URL: ")
     repo_name = repo_url.split("/")[-1].replace(".git", "")
     repo_path = os.path.join(os.getcwd(), repo_name)
 
-    # Clone repository
     cloner = RepoCloner(repo_url)
     cloner.clone()
 
-    # Kiểm tra xem repository đã được clone thành công
     if not os.path.exists(repo_path):
         print(f"Error: Repository was not cloned successfully. Path {repo_path} does not exist.")
-        return
+        return None, None, None
 
-    # Tạo thư mục reports trong thư mục repository
+    return repo_url, repo_name, repo_path
+
+
+def create_reports_directory(repo_path):
+    """
+    Create a reports directory inside the repository.
+    """
     reports_dir = os.path.join(repo_path, "reports")
     if not os.path.exists(reports_dir):
         os.makedirs(reports_dir)
         print(f"Created directory: {reports_dir}")
+    return reports_dir
 
-    # Đường dẫn đầy đủ của file kết quả trong thư mục reports
-    result_file = os.path.join(reports_dir, f"{repo_name}.json")
-    output_filename = f"{repo_name}_filtered.json"  # Chỉ tên file, không phải đường dẫn đầy đủ
 
-    # Chạy Semgrep và phân tích kết quả
-    if run_semgrep(repo_path, result_file):
-        # Truyền repo_path để lưu kết quả vào thư mục reports trong repository
-        analysis_semgrep(result_file, output_filename, repo_path)
-    else:
-        print("Semgrep scan failed. Skipping analysis.")
-        
-    if run_java_analyzer(repo_path, reports_dir, repo_name):
-        print("Java analysis completed successfully.")
-    else:
-        print("Java analysis failed.")
+def initialize_file_paths(reports_dir, repo_name, timestamp):
+    """
+    Initialize file paths for analysis results.
+    """
+    return {
+        "semgrep_input_file": os.path.join(reports_dir, f"{repo_name}_semgrep_input.json"),
+        "semgrep_output_file": os.path.join(reports_dir, f"{repo_name}_semgrep_output_{timestamp}.json"),
+        "java_output_file": os.path.join(reports_dir, f"{repo_name}_java_analysis_{timestamp}.json"),
+    }
 
-    # Lựa chọn LLM model thông qua menu tương tác từ background.py
-    print("\nSelecting LLM model for vulnerability analysis...")
-    try:
-        # Tạo ReportManager trước khi sử dụng
-        report_manager = ReportManager()
-        
-        # Lựa chọn model
-        model_type, model_name = select_model()
-        print(f"Selected {model_type} - {model_name}")
 
-        # Khởi tạo LLM client
-        llm_client = create_llm_client(model_type, model_name, report_manager)
+def run_semgrep_analysis(repo_path, file_paths):
+    """
+    Run Semgrep analysis and return the output file path.
+    """
+    print("\n[+] Running Semgrep analysis...")
+    semgrep_success = run_semgrep(repo_path, file_paths["semgrep_input_file"])
 
-        # Chạy test đơn giản
-        print("\nRunning a simple test to verify LLM functionality...")
-        test_prompt = "Analyze the following code for security issues: public String getUserData(String id) { return repo.findById(id); }"
-        response = llm_client.generate_response(test_prompt)
-
-        if response["success"]:
-            print("LLM test successful!")
-            print("Sample response:\n" + "-"*50)
-            # In tối đa 500 ký tự đầu tiên của response để không quá dài
-            print(response["content"][:500] + "..." if len(response["content"]) > 500 else response["content"])
-            print("-"*50)
+    if (semgrep_success):
+        semgrep_result = analysis_semgrep(
+            file_paths["semgrep_input_file"], os.path.basename(file_paths["semgrep_output_file"]), repo_path
+        )
+        if semgrep_result:
+            print(f"[+] Semgrep analysis completed. Results saved to: {file_paths['semgrep_output_file']}")
+            return file_paths["semgrep_output_file"]
         else:
-            print(f"LLM test failed: {response['error']}")
-            print("Aborting LLM analysis.")
-            return
-        
-        # Khởi tạo analyzer với model đã chọn
+            print("[-] Semgrep analysis failed to process results.")
+    else:
+        print("[-] Semgrep scan failed.")
+    return None
+
+
+def run_java_analysis(repo_path, reports_dir, repo_name, file_paths):
+    """
+    Run Java code analysis and return the output file path.
+    """
+    print("\n[+] Running Java code analysis...")
+    java_success = run_java_analyzer(repo_path, reports_dir, repo_name, file_paths["java_output_file"])
+
+    if java_success:
+        print(f"[+] Java analysis completed. Results saved to: {file_paths['java_output_file']}")
+        return file_paths["java_output_file"]
+    else:
+        print("[-] Java analysis failed or no Java files found.")
+    return None
+
+
+def determine_llm_input(java_output_file, semgrep_output_file, file_paths):
+    """
+    Determine which analysis results to use as input for LLM.
+    """
+    if java_output_file and semgrep_output_file:
+        print("\n[+] Both analysis methods completed successfully.")
+        print("    Which analysis results would you like to use for LLM processing?")
+        print("    [1] Java code analysis")
+        print("    [2] Semgrep analysis")
+        print("    [3] Merged results (combine Java and Semgrep)")
+
+        choice = input("\nYour choice (1/2/3, default=1): ").strip()
+        if choice == "2":
+            print(f"\n[+] Using Semgrep analysis results for LLM processing.")
+            return semgrep_output_file, "semgrep"
+        elif choice == "3":
+            print(f"\n[+] Merging Java and Semgrep analysis results...")
+            # Local import to avoid circular import issues
+            from src.utils.merge_file import merge_repo_semgrep
+            merged_file = merge_repo_semgrep(
+                java_output_file, semgrep_output_file, file_paths["semgrep_output_file"]
+            )
+            if merged_file:
+                print(f"[+] Successfully merged analysis results to: {merged_file}")
+                return merged_file, "merged"
+            else:
+                print("[-] Failed to merge analysis results. Using Java analysis as fallback.")
+        print(f"\n[+] Using Java analysis results for LLM processing.")
+        return java_output_file, "java"
+    elif java_output_file:
+        print("\n[+] Using Java analysis results for LLM processing.")
+        return java_output_file, "java"
+    elif semgrep_output_file:
+        print("\n[+] Using Semgrep analysis results for LLM processing.")
+        return semgrep_output_file, "semgrep"
+    else:
+        print("\n[-] No analysis results available. Cannot proceed with LLM processing.")
+        return None, None
+
+
+def run_llm_analysis(llm_input_file, analysis_type, reports_dir, repo_name, timestamp):
+    """
+    Run LLM analysis on the selected input file.
+    """
+    if not os.path.exists(llm_input_file) or os.path.getsize(llm_input_file) == 0:
+        print(f"\n[-] Error: Input file {llm_input_file} is missing or empty. Cannot proceed with LLM processing.")
+        return
+
+    print("\n===== LLM MODEL SELECTION =====")
+    try:
+        report_manager = ReportManager()
+        model_type, model_name = select_model()
+        print(f"\n[+] Selected model: {model_type} - {model_name}")
+
         analyzer = VulnerabilityAnalyzer(model_type, model_name)
-        
-        # Đường dẫn file đầu vào cho LLM (output từ bước phân tích)
-        input_file = os.path.join(reports_dir, output_filename)
-        
-        # Kiểm tra file có tồn tại không
-        if not os.path.exists(input_file):
-            print(f"Error: Input file {input_file} not found for LLM analysis.")
-            return
-        
-        # Tên file output cho LLM analysis
-        llm_output = os.path.join(reports_dir, f"{repo_name}_llm_analysis.md")
-        
-        # Chạy phân tích LLM - không cần test_first vì đã test ở trên
-        print(f"\nStarting LLM analysis with {model_type} - {model_name}...")
-        if analyzer.analyze(input_file, test_first=False):
+        llm_output = os.path.join(reports_dir, f"{repo_name}_{analysis_type}_llm_analysis_{timestamp}.md")
+
+        print(f"\n[+] Starting LLM analysis with {model_type} - {model_name}...")
+        print(f"    Input file: {llm_input_file}")
+        print(f"    Output file: {llm_output}")
+
+        if analyzer.analyze(llm_input_file, test_first=False):
             output_path = analyzer.generate_report(llm_output)
             if output_path:
-                print(f"\nLLM analysis completed successfully.")
-                print(f"Report saved to: {output_path}")
+                print(f"\n[+] LLM analysis completed successfully!")
+                print(f"    Report saved to: {output_path}")
             else:
-                print("\nNo reports were generated during analysis.")
+                print("\n[-] No reports were generated during analysis.")
         else:
-            print("\nLLM analysis failed.")
-        
+            print("\n[-] LLM analysis failed.")
     except ModuleNotFoundError as e:
-        if "google.generativeai" in str(e):
-            print("Error: Google Generative AI library not found. Please install it with:")
-            print("pip install google-generativeai")
-        elif "openai" in str(e):
-            print("Error: OpenAI library not found. Please install it with:")
-            print("pip install openai")
-        else:
-            print(f"Error: Missing module - {e}")
+        handle_missing_module_error(e)
     except Exception as e:
-        print(f"Error in LLM analysis: {e}")
+        print(f"\n[-] Error in LLM analysis: {e}")
         logging.exception("LLM analysis error")
-        
+
+
+def handle_missing_module_error(e):
+    """
+    Handle missing module errors during LLM analysis.
+    """
+    if "google.generativeai" in str(e):
+        print("\n[-] Error: Google Generative AI library not found. Please install it with:")
+        print("    pip install google-generativeai")
+    elif "openai" in str(e):
+        print("\n[-] Error: OpenAI library not found. Please install it with:")
+        print("    pip install openai")
+    else:
+        print(f"\n[-] Error: Missing module - {e}")
+
+
 if __name__ == "__main__":
     main()

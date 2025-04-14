@@ -3,6 +3,7 @@ import os
 from typing import Dict, Any
 from dotenv import load_dotenv
 import openai  # Thay đổi thư viện
+import time
 
 from .exception import LLMAuthError, LLMConnectionError, LLMResponseError, LLMError
 from .config import logger, LLMConfig
@@ -137,3 +138,59 @@ class OpenAIClient(BaseLLM):  # Sửa tên lớp
                 "error": str(e),
                 "error_type": "UnexpectedError"
             }
+            
+    def retry_with_backoff(self, prompt: str, 
+                          max_tokens: int = None, 
+                          temperature: float = None,
+                          max_retries: int = LLMConfig.MAX_RETRIES,
+                          initial_backoff: float = LLMConfig.INITIAL_BACKOFF) -> Dict[str, Any]:
+        """
+        Send a prompt to LLM with exponential backoff retry logic
+        
+        Args:
+            prompt: Text prompt to send
+            max_tokens: Maximum tokens in response
+            temperature: Temperature for sampling
+            max_retries: Maximum number of retry attempts
+            initial_backoff: Initial backoff time in seconds
+            
+        Returns:
+            Dict containing success status and content or error
+        """
+        backoff = initial_backoff
+        attempt = 0
+        
+        while attempt <= max_retries:  # Include the initial attempt in the count
+            attempt += 1
+            
+            try:
+                response = self.generate_response(prompt, max_tokens, temperature)
+                
+                if response["success"]:
+                    return response
+                elif "rate_limit" in str(response.get("error", "")).lower() and attempt <= max_retries:
+                    logger.warning(f"Rate limit hit, retrying in {backoff} seconds (attempt {attempt}/{max_retries})")
+                    time.sleep(backoff)
+                    backoff *= 2  # Exponential backoff
+                else:
+                    return response  # Return the error response
+                    
+            except Exception as e:
+                if attempt <= max_retries:
+                    logger.warning(f"Attempt {attempt}/{max_retries} failed: {str(e)}. Retrying in {backoff} seconds.")
+                    time.sleep(backoff)
+                    backoff *= 2  # Exponential backoff
+                else:
+                    logger.error(f"All {max_retries} retry attempts failed.")
+                    return {
+                        "success": False,
+                        "error": f"Failed after {max_retries} attempts: {str(e)}",
+                        "error_type": "RetryExhausted"
+                    }
+        
+        # Should never get here, but just in case
+        return {
+            "success": False,
+            "error": "Retry logic failed in an unexpected way",
+            "error_type": "RetryLogicError"
+        }

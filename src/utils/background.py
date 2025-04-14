@@ -7,6 +7,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.LLM.config import LLMConfig, logger
 
+# Global variables to track if we've already asked for keys
+_already_prompted_for_gemini = False
+_already_prompted_for_openai = False
+
 def clear_screen():
     """Clear the terminal screen based on OS"""
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -17,12 +21,9 @@ def display_header(title: str):
     print(f"{title:^60}")
     print("=" * 60 + "\n")
 
-def check_api_keys(prompt_for_missing: bool = False) -> Tuple[bool, bool]:
+def manage_api_keys() -> Tuple[bool, bool]:
     """
-    Check if API keys are available in environment variables
-    
-    Args:
-        prompt_for_missing: If True, prompt user to input missing API keys
+    Manage API keys - view, add, or update them
     
     Returns:
         Tuple[bool, bool]: (gemini_available, openai_available)
@@ -30,9 +31,112 @@ def check_api_keys(prompt_for_missing: bool = False) -> Tuple[bool, bool]:
     gemini_key = os.getenv("GEMINI_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
     
-    # Prompt for missing API keys if requested
+    while True:
+        clear_screen()
+        display_header("API KEY MANAGEMENT")
+        
+        # Display current API key status
+        print("Current API Keys:")
+        print(f"1. Gemini API Key: {'Set' if gemini_key else 'Not Set'}")
+        print(f"2. OpenAI API Key: {'Set' if openai_key else 'Not Set'}")
+        print("\nOptions:")
+        print("1. Set/Update Gemini API Key")
+        print("2. Set/Update OpenAI API Key") 
+        print("3. Save keys to .env file")
+        print("0. Return to main menu")
+        
+        choice = input("\nEnter your choice (0-3): ").strip()
+        
+        if choice == '0':
+            break
+        elif choice == '1':
+            gemini_key = input("\nEnter your Gemini API key (leave blank to keep current): ").strip()
+            if gemini_key:
+                os.environ["GEMINI_API_KEY"] = gemini_key
+                print("Gemini API key updated for this session.")
+        elif choice == '2':
+            openai_key = input("\nEnter your OpenAI API key (leave blank to keep current): ").strip()
+            if openai_key:
+                os.environ["OPENAI_API_KEY"] = openai_key
+                print("OpenAI API key updated for this session.")
+        elif choice == '3':
+            save_keys_to_env(gemini_key, openai_key)
+        else:
+            input("Invalid choice. Press Enter to try again...")
+    
+    return bool(gemini_key), bool(openai_key)
+
+def save_keys_to_env(gemini_key: Optional[str], openai_key: Optional[str]):
+    """
+    Save API keys to .env file
+    
+    Args:
+        gemini_key: Gemini API key
+        openai_key: OpenAI API key
+    """
+    try:
+        # Path to .env file
+        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+        
+        # Read existing content
+        existing_lines = []
+        gemini_line_exists = False
+        openai_line_exists = False
+        
+        if os.path.exists(env_path):
+            with open(env_path, 'r') as f:
+                for line in f:
+                    if line.strip().startswith('GEMINI_API_KEY='):
+                        if gemini_key:  # Only replace if we have a value
+                            existing_lines.append(f"GEMINI_API_KEY={gemini_key}\n")
+                        else:
+                            existing_lines.append(line)  # Keep the existing line
+                        gemini_line_exists = True
+                    elif line.strip().startswith('OPENAI_API_KEY='):
+                        if openai_key:  # Only replace if we have a value
+                            existing_lines.append(f"OPENAI_API_KEY={openai_key}\n")
+                        else:
+                            existing_lines.append(line)  # Keep the existing line
+                        openai_line_exists = True
+                    else:
+                        existing_lines.append(line)
+        
+        # Add keys that didn't exist before
+        if gemini_key and not gemini_line_exists:
+            existing_lines.append(f"GEMINI_API_KEY={gemini_key}\n")
+        
+        if openai_key and not openai_line_exists:
+            existing_lines.append(f"OPENAI_API_KEY={openai_key}\n")
+        
+        # Write back to file
+        with open(env_path, 'w') as f:
+            f.writelines(existing_lines)
+        
+        print("\n✅ API keys saved to .env file successfully.")
+        input("Press Enter to continue...")
+    
+    except Exception as e:
+        print(f"\n❌ Error saving API keys to .env file: {str(e)}")
+        input("Press Enter to continue...")
+
+def check_api_keys(prompt_for_missing: bool = False) -> Tuple[bool, bool]:
+    """
+    Check if API keys are available in environment variables
+    
+    Args:
+        prompt_for_missing: If True, prompt user to input missing API keys (only once)
+    
+    Returns:
+        Tuple[bool, bool]: (gemini_available, openai_available)
+    """
+    global _already_prompted_for_gemini, _already_prompted_for_openai
+    
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    
+    # Prompt for missing API keys if requested and not already prompted
     if prompt_for_missing:
-        if not gemini_key:
+        if not gemini_key and not _already_prompted_for_gemini:
             print("\nGEMINI_API_KEY not found in environment variables.")
             key_input = input("Would you like to enter a Gemini API key now? (y/n): ").strip().lower()
             if key_input == 'y':
@@ -41,8 +145,13 @@ def check_api_keys(prompt_for_missing: bool = False) -> Tuple[bool, bool]:
                     # Store temporarily for this session
                     os.environ["GEMINI_API_KEY"] = gemini_key
                     print("Gemini API key stored for this session.")
+                    
+                    # Ask if user wants to save to .env
+                    if input("Would you like to save this key to .env file? (y/n): ").strip().lower() == 'y':
+                        save_keys_to_env(gemini_key, None)
+            _already_prompted_for_gemini = True
         
-        if not openai_key:
+        if not openai_key and not _already_prompted_for_openai:
             print("\nOPENAI_API_KEY not found in environment variables.")
             key_input = input("Would you like to enter an OpenAI API key now? (y/n): ").strip().lower()
             if key_input == 'y':
@@ -51,6 +160,11 @@ def check_api_keys(prompt_for_missing: bool = False) -> Tuple[bool, bool]:
                     # Store temporarily for this session
                     os.environ["OPENAI_API_KEY"] = openai_key
                     print("OpenAI API key stored for this session.")
+                    
+                    # Ask if user wants to save to .env
+                    if input("Would you like to save this key to .env file? (y/n): ").strip().lower() == 'y':
+                        save_keys_to_env(None, openai_key)
+            _already_prompted_for_openai = True
     
     return bool(gemini_key), bool(openai_key)
 
@@ -73,9 +187,14 @@ def select_model(force_interactive: bool = False) -> Tuple[str, str]:
     if not gemini_available and not openai_available:
         print("\nNo API keys available. Please set GEMINI_API_KEY or OPENAI_API_KEY in your environment.")
         print("You can also add these to your .env file.")
-        if input("Continue without API keys? (y/n): ").strip().lower() != 'y':
-            print("Exiting program...")
-            sys.exit(0)
+        
+        if input("Would you like to manage API keys now? (y/n): ").strip().lower() == 'y':
+            gemini_available, openai_available = manage_api_keys()
+        
+        if not gemini_available and not openai_available:
+            if input("Continue without API keys? (y/n): ").strip().lower() != 'y':
+                print("Exiting program...")
+                sys.exit(0)
     
     # If only one API is available and not forcing interactive mode, auto-select it
     if not force_interactive:
@@ -101,19 +220,25 @@ def select_model(force_interactive: bool = False) -> Tuple[str, str]:
             print("[2] OpenAI GPT")
         else:
             print("[2] OpenAI GPT (API key not found)")
-            
+        
+        print("[3] Manage API Keys")    
         print("[0] Exit")
         
-        choice = input("\nEnter your choice (0-2): ").strip()
+        choice = input("\nEnter your choice (0-3): ").strip()
         
         if choice == '0':
             print("Exiting program...")
             sys.exit(0)
         
+        # Manage API Keys
+        elif choice == '3':
+            gemini_available, openai_available = manage_api_keys()
+            continue
+        
         # Gemini Models
         elif choice == '1':
             if not gemini_available:
-                input("Gemini API key not found. Set GEMINI_API_KEY in your environment. Press Enter to continue...")
+                input("Gemini API key not found. Press Enter to return to menu and select 'Manage API Keys'...")
                 continue
                 
             clear_screen()
@@ -141,7 +266,7 @@ def select_model(force_interactive: bool = False) -> Tuple[str, str]:
         # OpenAI Models
         elif choice == '2':
             if not openai_available:
-                input("OpenAI API key not found. Set OPENAI_API_KEY in your environment. Press Enter to continue...")
+                input("OpenAI API key not found. Press Enter to return to menu and select 'Manage API Keys'...")
                 continue
                 
             clear_screen()
@@ -165,10 +290,3 @@ def select_model(force_interactive: bool = False) -> Tuple[str, str]:
         
         else:
             input("Invalid choice. Press Enter to try again...")
-            
-
-
-if __name__ == "__main__":
-    # Test the selection function
-    model_type, model_name = select_model()
-    print(f"\nYou selected: {model_type} - {model_name}")

@@ -56,9 +56,7 @@ class PromptManager:
                 if not template.strip():
                     # File exists but is empty
                     logging.warning(f"Template file {self.template_file} is empty. Using default template.")
-                    self._create_default_template()  # Create default template file for future use
                     return default_template
-                
                 logging.info(f"Successfully loaded prompt template from {self.template_file}")
                 return template
                 
