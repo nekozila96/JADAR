@@ -2,6 +2,7 @@ import json
 import os
 import re
 import logging
+import demjson3
 from typing import Dict, List, Optional
 
 # Constants
@@ -24,45 +25,136 @@ def preprocess_json_string(json_str: str) -> str:
     
     # Restore original escaped backslashes
     json_str = json_str.replace('@@DOUBLE_BACKSLASH@@', '\\\\')
+
+    # Split the JSON string into lines for easier processing
+    lines = json_str.splitlines()
+    processed_lines = []
+    current_field = None
+    in_field_value = False
     
-    # Try to fix missing comma issues - look for patterns like "key": "value" "key":
-    json_str = re.sub(r'("[^"]+"\s*:\s*"[^"]+")(\s+")([^"]+"\s*:)', r'\1,\2\3', json_str)
+    # Process line by line
+    for i, line in enumerate(lines):
+        stripped_line = line.strip()
+        
+        # Check if this line starts a new field (like "1.X Field": "value")
+        field_match = re.match(r'^\s*"(1\.\d+[^"]*)"\s*:\s*"(.*)$', stripped_line)
+        
+        if field_match:
+            # If we were in a field value, close it properly
+            if in_field_value and current_field:
+                # Add closing quote and comma to the last field
+                if not processed_lines[-1].rstrip().endswith('",'):
+                    processed_lines[-1] = processed_lines[-1].rstrip() + '",'
+            
+            current_field = field_match.group(1)
+            in_field_value = True
+            processed_lines.append(stripped_line)
+            
+            # Check if this field value ends on the same line
+            if stripped_line.rstrip().endswith('"') or stripped_line.rstrip().endswith('",'):
+                in_field_value = False
+                
+                # If it doesn't end with a comma, add one (unless it's the last field)
+                if stripped_line.rstrip().endswith('"') and i < len(lines) - 1:
+                    processed_lines[-1] = processed_lines[-1] + ','
+                    
+        elif in_field_value:
+            # Continue with the previous field value
+            processed_lines.append(stripped_line)
+            
+            # Check if this line closes the field value
+            if stripped_line.rstrip().endswith('"') or stripped_line.rstrip().endswith('",'):
+                in_field_value = False
+                
+                # If it doesn't end with a comma, add one (unless it's the last field)
+                if stripped_line.rstrip().endswith('"') and i < len(lines) - 1:
+                    processed_lines[-1] = processed_lines[-1] + ','
+        else:
+            # Not in a field value, just append the line
+            processed_lines.append(stripped_line)
     
-    # Fix potential issues with trailing control characters in strings
-    json_str = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', json_str)
+    # Close any open field value
+    if in_field_value:
+        processed_lines[-1] = processed_lines[-1] + '"'
     
-    return json_str
+    # Join the processed lines back into a string
+    processed_json = "\n".join(processed_lines)
+    
+    # Ensure proper JSON structure
+    if processed_json.strip().startswith('{') and not processed_json.strip().endswith('}'):
+        processed_json = processed_json.rstrip() + "\n}"
+        
+    # Special fix for missing commas before new fields (desperate measure)
+    processed_json = re.sub(r'"\s*\n\s*"(1\.\d+)', '",\n"\\1', processed_json)
+    
+    # Special fix for the "1.4 Analysis" field which often causes issues
+    processed_json = re.sub(r'"1\.4 Analysis"\s*:\s*"([^"]*?)"\s*\n\s*"1\.5', 
+                          '"1.4 Analysis": "\\1",\n"1.5', processed_json)
+    
+    return processed_json
 
 def fix_json_format(json_str: str) -> str:
     """Apply advanced fixes for common JSON formatting issues."""
     try:
-        # First try with minimal processing
+        # First try standard JSON parser
         json.loads(json_str)
         return json_str  # If it parses correctly, return as is
     except json.JSONDecodeError as e:
-        # Apply more aggressive fixes
-        logger.info(f"Applying advanced JSON fixing techniques: {e}")
-        
-        # Apply the basic preprocessing
+        logger.info(f"Standard JSON parse failed: {e}. Applying preprocessing...")
+        # Apply preprocessing fixes
         fixed_str = preprocess_json_string(json_str)
-        
-        # Fix missing commas between objects (pattern: "}" "{")
-        fixed_str = re.sub(r'\}\s*\{', '},{', fixed_str)
-        
-        # Fix missing commas between key-value pairs
-        fixed_str = re.sub(r'"\s*}\s*"', '","', fixed_str)
-        
-        # Try again with more advanced regex if still failing
+
         try:
+            # Try standard parser again after preprocessing
             json.loads(fixed_str)
+            logger.info("Successfully parsed after preprocessing.")
             return fixed_str
-        except:
-            # Last resort: try to manually fix by examining error location
+        except json.JSONDecodeError as e2:
+            logger.warning(f"Standard JSON parse failed after preprocessing: {e2}. Applying extra fixes...")
+            
+            # Extra aggressive fix for missing commas between fields
+            error_msg = str(e2)
+            if "Expecting ',' delimiter" in error_msg:
+                pos = e2.pos
+                # Insert a comma at the position where the error occurred
+                fixed_str = fixed_str[:pos] + ',' + fixed_str[pos:]
+                try:
+                    json.loads(fixed_str)
+                    logger.info("Successfully parsed after inserting comma.")
+                    return fixed_str
+                except:
+                    pass
+            
+            # Fallback to demjson3 for more lenient parsing
             try:
-                parsed = json.loads(json_str, strict=False)
-                return json.dumps(parsed)
-            except:
-                # Return the best effort string
+                logger.warning("Falling back to demjson3.")
+                data = demjson3.decode(fixed_str)
+                logger.info("Successfully parsed using demjson3.")
+                return json.dumps(data)
+            except Exception as e3:
+                logger.error(f"Failed to parse with demjson3: {e3}")
+                
+                # Last resort: create a new JSON with only the essential fields
+                try:
+                    # Extract key fields using regex
+                    directory = re.search(r'"1\.1 Directory"\s*:\s*"([^"]*)"', fixed_str)
+                    vuln_type = re.search(r'"1\.2 Vulnerability Types"\s*:\s*"([^"]*)"', fixed_str)
+                    score = re.search(r'"1\.3 Confidence Score"\s*:\s*"([^"]*)"', fixed_str)
+                    analysis = re.search(r'"1\.4 Analysis"\s*:\s*"([^"]*?)(?:"|\Z)', fixed_str, re.DOTALL)
+                    
+                    if directory and vuln_type:
+                        # Create minimal valid JSON
+                        minimal_json = {
+                            "1.1 Directory": directory.group(1),
+                            "1.2 Vulnerability Types": vuln_type.group(1),
+                            "1.3 Confidence Score": score.group(1) if score else "",
+                            "1.4 Analysis": analysis.group(1) if analysis else ""
+                        }
+                        logger.warning("Using minimal extracted JSON as fallback")
+                        return json.dumps(minimal_json)
+                except:
+                    pass
+                    
                 return fixed_str
 
 class Vulnerability:
@@ -131,21 +223,25 @@ class VulnerabilityReport:
         """Extract JSON strings enclosed in ```json ... ``` using regex."""
         # Regex to find JSON content within ```json ... ``` blocks
         # re.DOTALL makes '.' match newlines as well
-        # The pattern captures the content inside the curly braces {}
+        # Use non-greedy match for content {.*?}
         pattern = r'```json\s*(\{.*?\})\s*```'
         json_strings = re.findall(pattern, content, re.DOTALL)
 
-        # If no blocks found, try parsing the whole content as a single JSON object
-        if not json_strings:
+        # If no blocks found, check if the entire content might be a single JSON object (without ```json)
+        if not json_strings and content.strip().startswith('{') and content.strip().endswith('}'):
              try:
                  # Attempt to parse the entire content directly
-                 json.loads(content)
-                 return [content.strip()] # Return the whole content if it's valid JSON
-             except json.JSONDecodeError:
-                 # If the whole content is not valid JSON either, return empty list
-                 print("Warning: Could not find ```json blocks and the entire content is not valid JSON.")
+                 processed_content = fix_json_format(content.strip())
+                 json.loads(processed_content) # Test if valid after fixing
+                 logger.info("No ```json blocks found, but content seems to be a single JSON object.")
+                 return [content.strip()] # Return the whole content
+             except (json.JSONDecodeError, Exception):
+                 logger.warning("Could not find ```json blocks and the entire content is not valid JSON after fixing.")
                  return []
-        
+        elif not json_strings:
+             logger.warning("Could not find any ```json blocks in the content.")
+             return []
+
         return [js.strip() for js in json_strings] # Return stripped JSON strings
 
     def load_json_file(self, filepath: str) -> None:
@@ -159,61 +255,86 @@ class VulnerabilityReport:
 
             json_strings = self._extract_json_blocks(content)
             processed_count = 0
-
+            skipped_blocks = 0
+            
             for i, json_str in enumerate(json_strings):
-                if not json_str:
+                if not json_str or not json_str.startswith('{'):
+                    logger.warning(f"Skipping invalid or empty block {i+1}.")
+                    skipped_blocks += 1
                     continue
 
-                try:
-                    # Apply preprocessing to fix common JSON formatting issues
-                    processed_json_str = fix_json_format(json_str)
-                    
-                    # Try to parse the processed string
-                    data = json.loads(processed_json_str)
-
-                    # Case 1: The JSON object contains numbered keys ("1.", "2.", etc.)
-                    if isinstance(data, dict) and any(key.rstrip('.').isdigit() for key in data.keys()):
-                        for key, vuln_data in data.items():
-                            if isinstance(vuln_data, dict): # Ensure the value is a dict
+                block_parsed = False
+                max_attempts = 3
+                current_attempt = 0
+                
+                while not block_parsed and current_attempt < max_attempts:
+                    try:
+                        current_attempt += 1
+                        # Apply fixing and parsing logic
+                        processed_json_str = fix_json_format(json_str)
+                        
+                        try:
+                            # The fix_json_format function now handles the fallback and re-encoding
+                            data = json.loads(processed_json_str)
+                            
+                            # Process the parsed data
+                            if isinstance(data, dict) and any(key.startswith('1.') and key[2:3].isdigit() for key in data.keys()):
+                                # Handle case where keys are "1.1", "1.2" etc. directly in the object
                                 try:
-                                    vuln = Vulnerability(vuln_data)
+                                    vuln = Vulnerability(data)
                                     self.vulnerabilities.append(vuln)
                                     processed_count += 1
+                                    block_parsed = True
+                                    break  # Successfully parsed, break out of retry loop
                                 except Exception as e:
-                                    print(f"Error processing vulnerability data under key '{key}' in block {i+1}: {str(e)}")
-                                    print(f"Data: {vuln_data}")
+                                    logger.error(f"Error processing vulnerability data in block {i+1}: {str(e)}")
+                                    
+                            elif isinstance(data, dict) and all(key.rstrip('.').isdigit() for key in data.keys()):
+                                # Handle case where keys are "1.", "2." etc. containing nested vulnerability dicts
+                                for key, vuln_data in data.items():
+                                    if isinstance(vuln_data, dict):
+                                        try:
+                                            vuln = Vulnerability(vuln_data)
+                                            self.vulnerabilities.append(vuln)
+                                            processed_count += 1
+                                            block_parsed = True
+                                        except Exception as e:
+                                            logger.error(f"Error processing nested vulnerability data under key '{key}' in block {i+1}: {str(e)}\nData: {vuln_data}")
+                                    else:
+                                        logger.warning(f"Expected a dictionary for key '{key}' in block {i+1}, but got {type(vuln_data)}. Skipping.")
+                            elif isinstance(data, dict):
+                                # Assume it's a single vulnerability report if it doesn't match the numbered patterns
+                                try:
+                                    vuln = Vulnerability(data)
+                                    self.vulnerabilities.append(vuln)
+                                    processed_count += 1
+                                    block_parsed = True
+                                except Exception as e:
+                                    logger.error(f"Error processing single vulnerability structure in block {i+1}: {str(e)}\nData: {data}")
                             else:
-                                 print(f"Warning: Expected a dictionary for key '{key}' in block {i+1}, but got {type(vuln_data)}. Skipping.")
-                    # Case 2: The JSON object is a single vulnerability report
-                    elif isinstance(data, dict):
-                         try:
-                            vuln = Vulnerability(data)
-                            self.vulnerabilities.append(vuln)
-                            processed_count += 1
-                         except Exception as e:
-                             print(f"Error processing single vulnerability in block {i+1}: {str(e)}")
-                             print(f"Data: {data}")
-                    # Case 3: Handle other potential structures if necessary (e.g., a list of vulnerabilities)
-                    # elif isinstance(data, list):
-                    #     for item in data:
-                    #         # process item
-                    #         pass
-                    else:
-                        print(f"Warning: Unexpected JSON structure in block {i+1}. Expected a dictionary. Got: {type(data)}")
+                                logger.warning(f"Unexpected JSON structure in block {i+1}. Expected a dictionary. Got: {type(data)}")
 
-
-                except json.JSONDecodeError as je:
-                    print(f"Warning: Could not parse JSON block {i+1}:")
-                    print(f"Block content (first 300 chars): {json_str[:300]}")
-                    print(f"Error details: {str(je)}")
-                except Exception as e:
-                    print(f"Error processing block {i+1}: {str(e)}")
-                    print(f"Block content (first 300 chars): {json_str[:300]}")
+                        except json.JSONDecodeError as je:
+                            # If we've reached max attempts, log the error
+                            if current_attempt >= max_attempts:
+                                logger.error(f"FINAL PARSE ERROR for block {i+1} after {max_attempts} attempts: {str(je)}")
+                                logger.error(f"Original block content (first 300 chars): {json_str[:300]}")
+                                logger.error(f"Processed block content (first 300 chars): {processed_json_str[:300]}")
+                                skipped_blocks += 1
+                                break
+                            # Otherwise, we'll retry with additional fixes
+                            logger.warning(f"Parse error on attempt {current_attempt}, trying again with more aggressive fixes")
+                    except Exception as e:
+                        # Catch any other unexpected errors during processing
+                        logger.error(f"Unexpected error processing block {i+1}: {str(e)}")
+                        logger.error(f"Original block content (first 300 chars): {json_str[:300]}")
+                        skipped_blocks += 1
+                        break  # Break out of retry loop for other errors
 
             if not self.vulnerabilities:
-                print(f"Warning: No valid vulnerabilities were successfully loaded from {filepath}")
+                logger.warning(f"No valid vulnerabilities were successfully loaded from {filepath}. Skipped {skipped_blocks} blocks.")
             else:
-                print(f"Successfully loaded {len(self.vulnerabilities)} vulnerabilities from {processed_count} processed entries in {filepath}")
+                logger.info(f"Successfully loaded {len(self.vulnerabilities)} vulnerabilities from {processed_count} processed entries in {filepath}. Skipped {skipped_blocks} blocks.")
 
         except Exception as e:
             raise Exception(f"Error reading or processing file {filepath}: {str(e)}")
