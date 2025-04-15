@@ -52,7 +52,7 @@ opentelemetry-util-http==0.46b0
 packaging==24.2
 peewee==3.17.9
 proto-plus==1.26.1
-protobuf>=3.20.2,<6.0.0
+protobuf==4.25.6
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
 pydantic==2.11.3
