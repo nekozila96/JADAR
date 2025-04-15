@@ -391,20 +391,57 @@ def run_llm_analysis(llm_input_file, analysis_type, reports_dir, repo_name, time
         model_type, model_name = select_model()
         print(f"\n[+] Selected model: {model_type} - {model_name}")
 
+        # Choose output format
+        print("\n===== OUTPUT FORMAT SELECTION =====")
+        print("Select output format:")
+        print("[1] Markdown (MD)")
+        print("[2] HTML Report")
+        
+        format_choice = input("\nEnter your choice (1/2, default=1): ").strip()
+        output_format = "html" if format_choice == "2" else "md"
+        
+        # Determine file extension based on format choice
+        file_extension = "html" if output_format == "html" else "md"
+        
         analyzer = VulnerabilityAnalyzer(model_type, model_name)
-        llm_output = os.path.join(reports_dir, f"{repo_name}_{analysis_type}_llm_analysis_{timestamp}.md")
+        llm_output = os.path.join(reports_dir, f"{repo_name}_{analysis_type}_llm_analysis_{timestamp}.{file_extension}")
 
         print(f"\n[+] Starting LLM analysis with {model_type} - {model_name}...")
         print(f"    Input file: {llm_input_file}")
         print(f"    Output file: {llm_output}")
+        print(f"    Output format: {output_format.upper()}")
 
         if analyzer.analyze(llm_input_file, test_first=False):
-            output_path = analyzer.generate_report(llm_output)
-            if output_path:
-                print(f"\n[+] LLM analysis completed successfully!")
-                print(f"    Report saved to: {output_path}")
+            # Generate the appropriate report based on format choice
+            if output_format == "html":
+                # First generate markdown report as intermediate step
+                temp_md_output = os.path.join(reports_dir, f"{repo_name}_{analysis_type}_llm_analysis_{timestamp}_temp.md")
+                output_path = analyzer.generate_report(temp_md_output)
+                
+                if output_path:
+                    # Convert markdown to HTML
+                    try:
+                        print(f"\n[+] Converting markdown report to HTML...")
+                        html_path = report_manager.generate_html_report(output_path, os.path.basename(llm_output))
+                        print(f"\n[+] LLM analysis completed successfully!")
+                        print(f"    HTML Report saved to: {html_path}")
+                        
+                        # Optionally delete the temporary markdown file
+                        os.remove(output_path)
+                        print(f"    (Temporary markdown file removed)")
+                    except Exception as html_error:
+                        print(f"\n[!] Warning: HTML conversion failed: {html_error}")
+                        print(f"    Markdown report is still available at: {output_path}")
+                else:
+                    print("\n[-] No reports were generated during analysis.")
             else:
-                print("\n[-] No reports were generated during analysis.")
+                # Regular markdown output
+                output_path = analyzer.generate_report(llm_output)
+                if output_path:
+                    print(f"\n[+] LLM analysis completed successfully!")
+                    print(f"    Report saved to: {output_path}")
+                else:
+                    print("\n[-] No reports were generated during analysis.")
         else:
             print("\n[-] LLM analysis failed.")
     except ModuleNotFoundError as e:

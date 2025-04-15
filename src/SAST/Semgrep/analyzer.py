@@ -58,7 +58,6 @@ def extract_vulnerability_info(item):
     vulnerability["lines"] = lines
     vulnerability["cwe"] = cwe
     vulnerability["owasp"] = owasp
-    vulnerability["lines"] = lines
 
     return vulnerability
 

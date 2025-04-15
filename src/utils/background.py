@@ -10,6 +10,34 @@ from src.LLM.config import LLMConfig, logger
 # Global variables to track if we've already asked for keys
 _already_prompted_for_gemini = False
 _already_prompted_for_openai = False
+_keys_loaded_from_env = False
+
+def load_env_file():
+    """Load environment variables from .env file if it exists"""
+    global _keys_loaded_from_env
+    
+    if _keys_loaded_from_env:
+        return
+    
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
+    
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        key, value = line.split('=', 1)
+                        # Only set if not already in environment
+                        if key not in os.environ:
+                            os.environ[key] = value
+            _keys_loaded_from_env = True
+            logger.info("Loaded environment variables from .env file")
+        except Exception as e:
+            logger.warning(f"Error loading .env file: {str(e)}")
+
+# Load environment variables at module import time
+load_env_file()
 
 def clear_screen():
     """Clear the terminal screen based on OS"""
@@ -28,6 +56,10 @@ def manage_api_keys() -> Tuple[bool, bool]:
     Returns:
         Tuple[bool, bool]: (gemini_available, openai_available)
     """
+    # Make sure we've loaded from .env first
+    if not _keys_loaded_from_env:
+        load_env_file()
+        
     gemini_key = os.getenv("GEMINI_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
     
@@ -54,16 +86,35 @@ def manage_api_keys() -> Tuple[bool, bool]:
             if gemini_key:
                 os.environ["GEMINI_API_KEY"] = gemini_key
                 print("Gemini API key updated for this session.")
+                # Auto-save to avoid having to enter again
+                save_choice = input("Would you like to save this key to .env file? (Y/n): ").strip().lower()
+                if save_choice != 'n':  # Default to yes if user just presses Enter
+                    save_keys_to_env(gemini_key, None)
+                    global _already_prompted_for_gemini
+                    _already_prompted_for_gemini = True  # Mark as prompted to avoid asking again
         elif choice == '2':
             openai_key = input("\nEnter your OpenAI API key (leave blank to keep current): ").strip()
             if openai_key:
                 os.environ["OPENAI_API_KEY"] = openai_key
                 print("OpenAI API key updated for this session.")
+                # Auto-save to avoid having to enter again
+                save_choice = input("Would you like to save this key to .env file? (Y/n): ").strip().lower()
+                if save_choice != 'n':  # Default to yes if user just presses Enter
+                    save_keys_to_env(None, openai_key)
+                    global _already_prompted_for_openai
+                    _already_prompted_for_openai = True  # Mark as prompted to avoid asking again
         elif choice == '3':
-            save_keys_to_env(gemini_key, openai_key)
+            if not gemini_key and not openai_key:
+                print("\nNo API keys to save. Please set at least one key first.")
+                input("Press Enter to continue...")
+            else:
+                save_keys_to_env(gemini_key, openai_key)
         else:
             input("Invalid choice. Press Enter to try again...")
     
+    # Verify keys one more time before returning
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
     return bool(gemini_key), bool(openai_key)
 
 def save_keys_to_env(gemini_key: Optional[str], openai_key: Optional[str]):
@@ -112,6 +163,10 @@ def save_keys_to_env(gemini_key: Optional[str], openai_key: Optional[str]):
         with open(env_path, 'w') as f:
             f.writelines(existing_lines)
         
+        # Set _keys_loaded_from_env to True since we've now written to the file
+        global _keys_loaded_from_env
+        _keys_loaded_from_env = True
+        
         print("\n✅ API keys saved to .env file successfully.")
         input("Press Enter to continue...")
     
@@ -131,39 +186,37 @@ def check_api_keys(prompt_for_missing: bool = False) -> Tuple[bool, bool]:
     """
     global _already_prompted_for_gemini, _already_prompted_for_openai
     
+    # Make sure we've loaded from .env first
+    if not _keys_loaded_from_env:
+        load_env_file()
+    
     gemini_key = os.getenv("GEMINI_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
     
     # Prompt for missing API keys if requested and not already prompted
     if prompt_for_missing:
         if not gemini_key and not _already_prompted_for_gemini:
-            print("\nGEMINI_API_KEY not found in environment variables.")
-            key_input = input("Would you like to enter a Gemini API key now? (y/n): ").strip().lower()
-            if key_input == 'y':
+            print("\nGEMINI_API_KEY not found.")
+            key_input = input("Would you like to enter a Gemini API key now? (Y/n): ").strip().lower()
+            if key_input != 'n':  # Default to yes
                 gemini_key = input("Enter your Gemini API key: ").strip()
                 if gemini_key:
-                    # Store temporarily for this session
+                    # Store permanently to avoid asking again
                     os.environ["GEMINI_API_KEY"] = gemini_key
                     print("Gemini API key stored for this session.")
-                    
-                    # Ask if user wants to save to .env
-                    if input("Would you like to save this key to .env file? (y/n): ").strip().lower() == 'y':
-                        save_keys_to_env(gemini_key, None)
+                    save_keys_to_env(gemini_key, None)
             _already_prompted_for_gemini = True
         
         if not openai_key and not _already_prompted_for_openai:
-            print("\nOPENAI_API_KEY not found in environment variables.")
-            key_input = input("Would you like to enter an OpenAI API key now? (y/n): ").strip().lower()
-            if key_input == 'y':
+            print("\nOPENAI_API_KEY not found.")
+            key_input = input("Would you like to enter an OpenAI API key now? (Y/n): ").strip().lower()
+            if key_input != 'n':  # Default to yes
                 openai_key = input("Enter your OpenAI API key: ").strip()
                 if openai_key:
-                    # Store temporarily for this session
+                    # Store permanently to avoid asking again
                     os.environ["OPENAI_API_KEY"] = openai_key
                     print("OpenAI API key stored for this session.")
-                    
-                    # Ask if user wants to save to .env
-                    if input("Would you like to save this key to .env file? (y/n): ").strip().lower() == 'y':
-                        save_keys_to_env(None, openai_key)
+                    save_keys_to_env(None, openai_key)
             _already_prompted_for_openai = True
     
     return bool(gemini_key), bool(openai_key)

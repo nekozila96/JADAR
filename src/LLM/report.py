@@ -105,3 +105,79 @@ class ReportManager:
         except Exception as e:
             logger.error(f"Error merging reports: {str(e)}")
             raise ReportFileError(f"Failed to merge reports: {str(e)}")
+    
+    def generate_html_report(self, json_report_path: str, output_filename: Optional[str] = None) -> str:
+        """
+        Generate an HTML report from JSON report file
+        
+        Args:
+            json_report_path: Path to the JSON report file
+            output_filename: Custom filename for the HTML report (optional)
+            
+        Returns:
+            str: Path to the generated HTML report
+        """
+        try:
+            from src.report.html_report import VulnerabilityReport
+            
+            # Import the HTML report generator
+            report = VulnerabilityReport()
+            
+            # Load JSON report
+            report.load_json_file(json_report_path)
+            
+            # Group vulnerabilities by OWASP category
+            report.group_by_owasp()
+            
+            # Generate default output filename if not provided
+            if not output_filename:
+                base_name = os.path.basename(json_report_path)
+                name_without_ext = os.path.splitext(base_name)[0]
+                output_filename = f"{name_without_ext}.html"
+            
+            # Generate HTML report
+            report.generate_html(output_filename, self.report_dir)
+            
+            output_path = os.path.join(self.report_dir, output_filename)
+            logger.info(f"HTML report generated at: {output_path}")
+            return output_path
+            
+        except ImportError:
+            logger.error("Could not import VulnerabilityReport class")
+            raise ReportError("HTML report generation module not available")
+        except Exception as e:
+            logger.error(f"Error generating HTML report: {str(e)}")
+            raise ReportError(f"Failed to generate HTML report: {str(e)}")
+    
+    def convert_all_to_html(self, pattern: str = "*.json") -> List[str]:
+        """
+        Convert all JSON reports matching a pattern to HTML format
+        
+        Args:
+            pattern: File pattern to match (default: "*.json")
+            
+        Returns:
+            List[str]: Paths to all generated HTML reports
+        """
+        try:
+            # Find all JSON reports
+            report_files = list(Path(self.report_dir).glob(pattern))
+            html_reports = []
+            
+            if not report_files:
+                logger.info(f"No reports found matching pattern: {pattern}")
+                return []
+            
+            for report_file in report_files:
+                try:
+                    html_path = self.generate_html_report(str(report_file))
+                    html_reports.append(html_path)
+                except Exception as e:
+                    logger.error(f"Error converting {report_file} to HTML: {str(e)}")
+                    continue
+            
+            return html_reports
+        
+        except Exception as e:
+            logger.error(f"Error in batch HTML conversion: {str(e)}")
+            raise ReportError(f"Failed to convert reports to HTML: {str(e)}")
