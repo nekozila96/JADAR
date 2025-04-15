@@ -4,7 +4,8 @@ apt install python3 -y
 apt install python3-pip -y
 apt install python3-venv -y
 python3 -m venv myenv
-pip install -r requirements.txt
+pip install protobuf>=3.20.2,<6.0.0
+pip install -r requirements.txt --no-deps
 
 
 ## Usage
