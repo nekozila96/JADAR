@@ -40,7 +40,7 @@ class LLMConfig:
     OPENAI_MAX_TOKENS = 8192
     
     # Common LLM configuration
-    DEFAULT_TEMPERATURE = 0.7
+    DEFAULT_TEMPERATURE = 0.3
     DEFAULT_TOP_P = 0.95
     DEFAULT_TOP_K = 40
     REQUEST_TIMEOUT = 120  # Seconds
