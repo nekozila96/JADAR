@@ -237,30 +237,6 @@ def create_llm_client(model_type: str, model_name: Optional[str] = None, report_
     else:
         raise ValueError(f"Unsupported model type: {model_type}. Use 'gemini' or 'openai'.")
 
-
-def main():
-    """
-    Main function to orchestrate the vulnerability analysis process.
-    """
-    repo_url, repo_name, repo_path = clone_repository()
-    if not repo_path:
-        return
-
-    reports_dir = create_reports_directory(repo_path)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_paths = initialize_file_paths(reports_dir, repo_name, timestamp)
-
-    print("\n===== RUNNING SECURITY SCANNERS =====")
-    semgrep_output_file = run_semgrep_analysis(repo_path, file_paths)
-    java_output_file = run_java_analysis(repo_path, reports_dir, repo_name, file_paths)
-
-    llm_input_file, analysis_type = determine_llm_input(java_output_file, semgrep_output_file, file_paths)
-    if not llm_input_file:
-        return
-
-    run_llm_analysis(llm_input_file, analysis_type, reports_dir, repo_name, timestamp)
-
-
 def clone_repository():
     """
     Clone the repository and return its details.
@@ -356,8 +332,13 @@ def determine_llm_input(java_output_file, semgrep_output_file, file_paths):
             print(f"\n[+] Merging Java and Semgrep analysis results...")
             # Local import to avoid circular import issues
             from src.utils.merge_file import merge_repo_semgrep
+            
+            # Generate merged output filename
+            merged_output_file = os.path.join(os.path.dirname(file_paths["semgrep_output_file"]), 
+                                             f"merged_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+            
             merged_file = merge_repo_semgrep(
-                java_output_file, semgrep_output_file, file_paths["semgrep_output_file"]
+                java_output_file, semgrep_output_file, merged_output_file
             )
             if merged_file:
                 print(f"[+] Successfully merged analysis results to: {merged_file}")
@@ -464,6 +445,27 @@ def handle_missing_module_error(e):
     else:
         print(f"\n[-] Error: Missing module - {e}")
 
+def main():
+    """
+    Main function to orchestrate the vulnerability analysis process.
+    """
+    repo_url, repo_name, repo_path = clone_repository()
+    if not repo_path:
+        return
+
+    reports_dir = create_reports_directory(repo_path)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_paths = initialize_file_paths(reports_dir, repo_name, timestamp)
+
+    print("\n===== RUNNING SECURITY SCANNERS =====")
+    semgrep_output_file = run_semgrep_analysis(repo_path, file_paths)
+    java_output_file = run_java_analysis(repo_path, reports_dir, repo_name, file_paths)
+
+    llm_input_file, analysis_type = determine_llm_input(java_output_file, semgrep_output_file, file_paths)
+    if not llm_input_file:
+        return
+
+    run_llm_analysis(llm_input_file, analysis_type, reports_dir, repo_name, timestamp)
 
 if __name__ == "__main__":
     main()
