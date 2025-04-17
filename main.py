@@ -330,21 +330,53 @@ def determine_llm_input(java_output_file, semgrep_output_file, file_paths):
             return semgrep_output_file, "semgrep"
         elif choice == "3":
             print(f"\n[+] Merging Java and Semgrep analysis results...")
-            # Local import to avoid circular import issues
-            from src.utils.merge_file import merge_repo_semgrep
-            
-            # Generate merged output filename
-            merged_output_file = os.path.join(os.path.dirname(file_paths["semgrep_output_file"]), 
-                                             f"merged_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-            
-            merged_file = merge_repo_semgrep(
-                java_output_file, semgrep_output_file, merged_output_file
-            )
-            if merged_file:
-                print(f"[+] Successfully merged analysis results to: {merged_file}")
-                return merged_file, "merged"
-            else:
-                print("[-] Failed to merge analysis results. Using Java analysis as fallback.")
+            try:
+                # Local import to avoid circular import issues
+                from src.utils.merge_file import merge_repo_semgrep
+                
+                # Generate merged output filename
+                merged_output_file = os.path.join(os.path.dirname(file_paths["semgrep_output_file"]), 
+                                                f"merged_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+                
+                # Kiểm tra file đầu vào tồn tại
+                if not os.path.exists(java_output_file):
+                    print(f"[-] Java output file not found: {java_output_file}")
+                    print("    Using Semgrep analysis as fallback.")
+                    return semgrep_output_file, "semgrep"
+                
+                if not os.path.exists(semgrep_output_file):
+                    print(f"[-] Semgrep output file not found: {semgrep_output_file}")
+                    print("    Using Java analysis as fallback.")
+                    return java_output_file, "java"
+                
+                # Thực hiện merge
+                merged_file = merge_repo_semgrep(
+                    java_output_file, semgrep_output_file, merged_output_file
+                )
+                
+                # Kiểm tra kết quả merge
+                if merged_file and os.path.exists(merged_file) and os.path.getsize(merged_file) > 0:
+                    # Thử đọc file đã merge để kiểm tra tính hợp lệ của JSON
+                    try:
+                        with open(merged_file, 'r', encoding='utf-8') as f:
+                            import json
+                            merged_data = json.load(f)
+                            if merged_data and len(merged_data) > 0:
+                                print(f"[+] Successfully merged analysis results to: {merged_file}")
+                                print(f"    Total findings in merged file: {len(merged_data)}")
+                                return merged_file, "merged"
+                            else:
+                                print("[-] Merged file is empty or invalid. Using Java analysis as fallback.")
+                    except Exception as e:
+                        print(f"[-] Error validating merged file: {str(e)}")
+                        print("    Using Java analysis as fallback.")
+                else:
+                    print("[-] Failed to create valid merged file. Using Java analysis as fallback.")
+            except Exception as e:
+                print(f"[-] Error during merge process: {str(e)}")
+                print("    Using Java analysis as fallback.")
+                
+        # Default or fallback to Java analysis
         print(f"\n[+] Using Java analysis results for LLM processing.")
         return java_output_file, "java"
     elif java_output_file:
@@ -356,6 +388,7 @@ def determine_llm_input(java_output_file, semgrep_output_file, file_paths):
     else:
         print("\n[-] No analysis results available. Cannot proceed with LLM processing.")
         return None, None
+
 
 
 def run_llm_analysis(llm_input_file, analysis_type, reports_dir, repo_name, timestamp):

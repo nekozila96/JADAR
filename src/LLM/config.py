@@ -27,7 +27,7 @@ class LLMConfig:
     # Gemini Configuration
     GEMINI_MODEL_1 = "gemini-1.5-pro"
     GEMINI_MODEL_2 = "gemini-2.0-flash"
-    GEMINI_MODEL_3 = "gemini-1.5-pro"
+    GEMINI_MODEL_3 = "gemini-2.5-pro"
     GEMINI_DEFAULT_MODEL = "gemini-2.0-flash"  # Added default model constant
     
     GEMINI_MAX_TOKENS = 8192
