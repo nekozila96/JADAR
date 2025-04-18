@@ -159,15 +159,12 @@ def main():
         if gemini_reports:
             gemini_merged = report_manager.merge_reports(
                 gemini_reports, 
-                f"{repo_name}_gemini_analysis.json"
+                f"{repo_name}_gemini_analysis.md"
             )
             print(f"\nMerged Gemini reports saved to {gemini_merged}")
             
             # Generate HTML report from Gemini merged report
             report = VulnerabilityReport()
-    
-            # Load JSON file (only one file as requested)
-            json_file = gemini_merged
             
             if os.path.exists(gemini_merged):
                 try:
@@ -184,7 +181,7 @@ def main():
             
             # Generate HTML report
             report.generate_html(output_file=f"{repo_name}_gemini_report.html")
-            print("Report generated successfully:", f"{repo_name}_gemini_report.html")
+            print("Report generated successfully:", f"{repo_name}_gemini_report.html") 
         
         if openai_reports:
             openai_merged = report_manager.merge_reports(
@@ -204,5 +201,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
