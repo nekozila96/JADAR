@@ -8,6 +8,8 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional, Union
 from dotenv import load_dotenv
 from pathlib import Path
+import google.generativeai as genai
+from google.api_core import exceptions as google_exceptions
 
 # Thiết lập logging
 logging.basicConfig(
@@ -103,8 +105,6 @@ You are a top Java security expert. Your job is to analyze and verify the vulner
 
 In addition to IDOR, the code belongs to the Damn Vulnerable Java Application (DVJA), which includes insecure code corresponding to the OWASP Top 10 2021 vulnerabilities:
 
-#Thêm mô tả, phương pháp detech(các hàm đặc trưng, ...)
-
 A1 - Broken Access Control
 A2 - Cryptographic Failures
 A3 - Injection
@@ -178,44 +178,26 @@ Your task is to perform an exhaustive static code analysis, focusing on remotely
 The user will input 15 chunks of information YOU NEED to make sure to write out every part of the report for every single of those 15 chunks, mark them with index numbers from 1 to 15.
 
 OUTPUT STRUCTURE:
-This section should include all the following components:
-Formatting Instructions (IMPORTANT — MUST FOLLOW STRICTLY):
----------------------------------------------------------------------------------------------
-1.1 Directory
-Include path to the vulnerable file
-Example: src/main/java/com/appsecco/dvja/example.java
+For each of the 15 chunks of information, provide a separate report entry numbered from 1 to 15. Each entry must include the following components, strictly following the format below:
+{{
+    1. Directory: [Include path to the vulnerable file] (e.g., src/main/java/com/appsecco/dvja/example.java),
+    2. Vulnerability Types: [Specify the type of vulnerability identified] (e.g., SQL Injection, XSS, IDOR),
+    3. Confidence Score: [Provide a numeric confidence score  from  1 to 10 /10 (without reasoning) indicating how sure you are that this vulnerability exists in the code. A score of 10 means you are completely confident.
+If your proof of concept (PoC) exploit does not start with remote user input via remote networking calls such as remote HTTP, API, or RPC calls, set the confidence score to 6 or below.],
+    4. Analysis: [Provide a line explaining the vulnerability that you just analysed],
+    5. Vulnerability Code: [Show the specific line(s) where the vulnerability occurs. (print out the codes lines)],
+    6. Proof of Concept (PoC): [Include a PoC exploit or detailed exploitation steps specific to the analyzed code. Ensure that the PoC is specific to the code you are analyzing;
+    bypasses any security controls in the analyzed code path and demonstrates how the vulnerability can be exploited in practice.],
+    7. Remediation code: [Updated secure code snippet to patch vulnerability] 
+}}
 
-1.2 Vulnerability Types   
-Specify the type of vulnerability identified (e.g.,  SQL Injection, XSS, IDOR).
-
-1.3 Confidence Score   
-Provide a numeric confidence score  from  1 to 10 /10 (without reasoning) indicating how sure you are that this vulnerability exists in the code. A score of 10 means you are completely confident.
-If your proof of concept (PoC) exploit does not start with remote user input via remote networking calls such as remote HTTP, API, or RPC calls, set the confidence score to 6 or below.
-
-1.4 Analysis   
-Provide a line explaining the vulnerability that you just analysed.
-
-1.5 Vulnerability Code   
-Show the specific line(s) where the vulnerability occurs.(print out the codes lines)
-
-1.6 Proof of Concept (PoC)
-Include a PoC exploit or detailed exploitation steps specific to the analyzed code. Ensure that the PoC:
-    - Is specific to the code you are analyzing.
-    - Bypasses any security controls in the analyzed code path.
-    - Demonstrates how the vulnerability can be exploited in practice.
-
-1.7 Remediation code:
-Updated secure code snippet to patch vulnerability 
----------------------------------------------------------------------------------------------
-
-Return your result inside a neat box using curly brackets ({{ and }}) before and after the output.
+Return your result inside a neat box using curly brackets ({{ and }}) before and after each chunk’s output. Each chunk’s report must be separated by a blank line.
 Use strict format: Directory → Vulnerability Types → Confidence Score → Analysis → Vulnerability Code → PoC → Remediation code.
 
 Key Guidelines for the AI:
 - Use 'None' for any aspect of the report that you lack the necessary information for.
-- Always output in the exact format specified above.
-- Ensure Analysis comes first, followed by Proof of Concept (PoC) and How to fix.
-- Confidence Score should always be a number between 1-10 , no explanation.
+- Always output in the exact format specified above, with each entry separated by a blank line.
+- Confidence Score should always be a number between 1-10, no explanation.
 - Clearly state Vulnerability Types and provide Context Code with exact line references.
 
 Reminder:
@@ -336,7 +318,7 @@ class ReportManager:
         """
         try:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
-            filename = f"{model_name}_chunk{chunk_id}_{timestamp}.json"
+            filename = f"{model_name}_chunk{chunk_id}_{timestamp}.md"
             filepath = os.path.join(self.report_dir, filename)
             
             # Write response to file
@@ -381,19 +363,18 @@ class ReportManager:
 # ---------- Specific LLM Implementations ----------
 
 class GeminiClient(BaseLLM):
-    """Client for interacting with Google Gemini API"""
+    """Client for interacting with Google Gemini API using the google-generativeai library"""
     
     # Class constants
-    DEFAULT_MODEL = "gemini-2.0-flash"
+    DEFAULT_MODEL = "gemini-2.0-flash" # Updated default model
     MAX_TOKENS = 8192
-    API_VERSION = "v1"
     
     def __init__(self, model: str = DEFAULT_MODEL):
         """
         Initialize Gemini client
         
         Args:
-            model: Gemini model to use (default: gemini-1.5-pro)
+            model: Gemini model to use (default: gemini-2.0-flash)
         """
         # Load environment variables
         load_dotenv()
@@ -403,152 +384,197 @@ class GeminiClient(BaseLLM):
         if not self.api_key:
             logger.error("API key not found. Please provide GEMINI_API_KEY in .env file")
             raise LLMAuthError("API key not found in .env file")
-        
-        self.model = model
-        self.api_base = os.getenv("GEMINI_API_BASE", "https://generativelanguage.googleapis.com")
+
+        try:
+            genai.configure(api_key=self.api_key)
+        except Exception as e:
+            logger.error(f"Failed to configure Gemini API: {str(e)}")
+            raise LLMAuthError(f"Failed to configure Gemini API: {str(e)}")
+
+        self.model_name = model
+        try:
+            # Initialize the generative model instance
+            self.model_instance = genai.GenerativeModel(self.model_name)
+        except Exception as e:
+            logger.error(f"Failed to initialize Gemini model '{self.model_name}': {str(e)}")
+            # Map common exceptions if possible, otherwise raise a generic LLMError
+            if isinstance(e, google_exceptions.NotFound):
+                 raise LLMError(f"Model '{self.model_name}' not found or access denied.")
+            raise LLMError(f"Failed to initialize Gemini model: {str(e)}")
         self.report_manager = ReportManager()
         
-        logger.info(f"Gemini Client initialized with model: {self.model}")
+        logger.info(f"Gemini Client initialized with model: {self.model_name}")
     
-    def build_api_url(self, endpoint: str) -> str:
-        """
-        Build API URL for Gemini
-        
-        Args:
-            endpoint: API endpoint
-            
-        Returns:
-            str: Complete API URL
-        """
-        return f"{self.api_base}/{self.API_VERSION}/{endpoint}?key={self.api_key}"
     
     def validate_connection(self) -> bool:
         """
-        Validate connection to the Gemini API
+        Validate connection to the Gemini API by checking model existence.
         
         Returns:
-            bool: True if connection is successful, False otherwise
+            bool: True if connection is successful and model exists, False otherwise
         """
         try:
-            # For Gemini, we'll check models endpoint
-            url = self.build_api_url("models")
-            response = requests.get(url, timeout=10)
-            
-            if response.status_code == 200:
-                models = response.json().get("models", [])
-                if any(self.model in model.get("name", "") for model in models):
-                    logger.info("API connection successful, requested model available")
-                    return True
-                else:
-                    logger.warning(f"Requested model '{self.model}' not found in available models")
-                    return False
-            else:
-                logger.error(f"Connection check failed: {response.status_code} - {response.text}")
-                return False
+            # Attempt to get model information as a connection check
+            genai.get_model(f'models/{self.model_name}')
+            logger.info(f"API connection successful, model '{self.model_name}' is available.")
+            return True
+        except google_exceptions.NotFound:
+            logger.error(f"Connection check failed: Model '{self.model_name}' not found or access denied.")
+            return False
+        except google_exceptions.PermissionDenied:
+            logger.error(f"Connection check failed: Permission denied. Check API key and permissions.")
+            return False
+        except google_exceptions.GoogleAPIError as e:
+            logger.error(f"Connection check failed due to API error: {str(e)}")
+            return False
         except Exception as e:
             logger.error(f"Error checking connection: {str(e)}")
             return False
     
-    def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> Dict[str, Any]:
+    def send_prompt(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> genai.types.GenerateContentResponse:
+        """
+        Send prompt to Gemini using the google-generativeai library.
+
+        Args:
+            prompt: The text prompt to send.
+            max_tokens: Maximum number of tokens for the response.
+            temperature: Temperature for generation.
+
+        Returns:
+            genai.types.GenerateContentResponse: The response object from the library.
+
+        Raises:
+            LLMConnectionError: If there's a connection issue.
+            LLMResponseError: If the API returns an error or invalid response.
+            LLMError: For other unexpected errors.
+        """
         try:
             # Ensure max_tokens doesn't exceed limit
             if max_tokens > self.MAX_TOKENS:
                 logger.warning(f"max_tokens ({max_tokens}) exceeds limit, using MAX_TOKENS ({self.MAX_TOKENS})")
                 max_tokens = self.MAX_TOKENS
             
-            # Build URL for the generateContent endpoint
-            endpoint = f"models/{self.model}:generateContent"
-            url = self.build_api_url(endpoint)
-            
-            # Prepare payload according to Gemini API format
-            payload = {
-                "contents": [
-                    {
-                        "parts": [
-                            {
-                                "text": prompt
-                            }
-                        ]
-                    }
-                ],
-                "generationConfig": {
-                    "maxOutputTokens": max_tokens,
-                    "temperature": temperature,
-                    "topP": 0.95,
-                    "topK": 40
-                }
-            }
-            
-            headers = {"Content-Type": "application/json"}
-            
-            logger.info(f"Sending prompt to Gemini with {max_tokens} max tokens")
-            response = requests.post(
-                url, 
-                headers=headers,
-                json=payload,
-                timeout=60
+            generation_config = genai.types.GenerationConfig(
+                max_output_tokens=max_tokens,
+                temperature=temperature,
+                top_p=0.95,
+                top_k=40
             )
             
-            if response.status_code == 200:
-                result = response.json()
-                logger.info("Successfully received response from Gemini")
-                return result
-            else:
-                error_message = f"API error: {response.status_code} - {response.text}"
-                logger.error(error_message)
-                raise LLMConnectionError(error_message)
+            logger.info(f"Sending prompt to Gemini model '{self.model_name}' with {max_tokens} max tokens")
+            
+            # Use the library to generate content
+            response = self.model_instance.generate_content(
+                prompt,
+                generation_config=generation_config,
+                request_options={'timeout': 120} # Increased timeout
+            )
+            
+            logger.info("Successfully received response from Gemini")
+            return response
                 
-        except requests.exceptions.RequestException as e:
-            error_message = f"Error connecting to Gemini API: {str(e)}"
+        except google_exceptions.ResourceExhausted as e:
+            error_message = f"Gemini API resource exhausted (e.g., quota): {str(e)}"
             logger.error(error_message)
             raise LLMConnectionError(error_message)
-        except json.JSONDecodeError as e:
-            error_message = f"Error processing JSON response: {str(e)}"
+        except google_exceptions.InvalidArgument as e:
+            error_message = f"Invalid argument sent to Gemini API: {str(e)}"
             logger.error(error_message)
-            raise LLMResponseError(error_message)
+            # Check for safety blocks
+            if "response was blocked" in str(e).lower():
+                 error_message += " (Potentially blocked due to safety settings)"
+                 raise LLMResponseError(error_message) # Treat as response error
+            raise LLMError(error_message) # Treat as general LLM error
+        except google_exceptions.GoogleAPIError as e:
+            error_message = f"Gemini API error: {str(e)}"
+            logger.error(error_message)
+            raise LLMConnectionError(error_message) # Treat as connection error
         except Exception as e:
-            error_message = f"Unexpected error sending prompt: {str(e)}"
+            # Catch potential timeouts specifically if possible, otherwise general exception
+            if "timeout" in str(e).lower():
+                 error_message = f"Request timed out: {str(e)}"
+                 logger.error(error_message)
+                 raise LLMConnectionError(error_message)
+            error_message = f"Unexpected error sending prompt via google-generativeai: {str(e)}"
             logger.error(error_message)
             raise LLMError(error_message)
     
-    def process_response(self, response: Dict[str, Any]) -> str:
+    def process_response(self, response: genai.types.GenerateContentResponse) -> str:
+        """
+        Process the response object from the google-generativeai library.
+
+        Args:
+            response: The GenerateContentResponse object.
+
+        Returns:
+            str: The extracted text content.
+
+        Raises:
+            LLMResponseError: If the response is invalid, blocked, or lacks content.
+        """
         try:
-            # Extract content from Gemini response structure
-            candidates = response.get('candidates', [{}])
-            if not candidates:
-                raise LLMResponseError("No candidates found in response")
-                
-            content = candidates[0].get('content', {})
-            parts = content.get('parts', [{}])
-            
-            if not parts:
-                raise LLMResponseError("No content parts found in response")
-                
-            # Extract text from parts
-            text_parts = [part.get('text', '') for part in parts if 'text' in part]
-            full_text = ''.join(text_parts)
-            
+            # Check for blocked responses due to safety or other reasons
+            if not response.candidates:
+                 # Try to get prompt feedback for the reason
+                 reason = "Unknown reason"
+                 if response.prompt_feedback and response.prompt_feedback.block_reason:
+                     reason = response.prompt_feedback.block_reason.name
+                 error_message = f"Response blocked or empty candidates. Reason: {reason}"
+                 logger.error(error_message)
+                 # You might want specific handling here, e.g., returning a placeholder or raising
+                 # For now, raise an error
+                 raise LLMResponseError(error_message)
+
+            # Access text directly from the response object
+            full_text = response.text
+
             # Get usage data if available
-            usage_metrics = response.get('usageMetadata', {})
-            prompt_tokens = usage_metrics.get('promptTokenCount', 0)
-            response_tokens = usage_metrics.get('candidatesTokenCount', 0)
-            total_tokens = prompt_tokens + response_tokens
-            
-            logger.info(f"Token usage: {prompt_tokens} (prompt) + {response_tokens} (response) = {total_tokens} (total)")
-            
+            try:
+                 usage_metadata = response.usage_metadata
+                 prompt_tokens = usage_metadata.prompt_token_count
+                 response_tokens = usage_metadata.candidates_token_count
+                 total_tokens = usage_metadata.total_token_count
+                 logger.info(f"Token usage: {prompt_tokens} (prompt) + {response_tokens} (response) = {total_tokens} (total)")
+            except AttributeError:
+                 logger.warning("Could not retrieve usage metadata from response.")
+            except Exception as e:
+                 logger.warning(f"Error retrieving usage metadata: {str(e)}")
+
+
             return full_text
+        except ValueError as e:
+            # Handle potential errors if response.text access fails (e.g., malformed response)
+            logger.error(f"Error accessing text from response: {str(e)}")
+            raise LLMResponseError(f"Failed to extract text from response: {str(e)}")
         except Exception as e:
             logger.error(f"Error processing response: {str(e)}")
+            # Log the raw response parts if helpful for debugging
+            try:
+                logger.debug(f"Raw response parts: {response.parts}")
+            except Exception:
+                pass # Ignore if parts cannot be accessed
             raise LLMResponseError(f"Failed to process response: {str(e)}")
     
     def generate_response(self, prompt: str, max_tokens: int = MAX_TOKENS, temperature: float = 0.3) -> Dict[str, Any]:
+        """
+        Generate response for a given prompt using the google-generativeai library.
+
+        Args:
+            prompt: Prompt text.
+            max_tokens: Maximum number of tokens in response.
+            temperature: Temperature for response generation.
+
+        Returns:
+            Dict: Result dictionary with success status and content or error.
+        """
         try:
-            # Check connection before sending prompt
-            if not self.validate_connection():
-                raise LLMConnectionError("Cannot connect to Gemini API")
+            # Connection validation is implicitly done during model initialization
+            # and checked explicitly if needed via self.validate_connection()
+            # if not self.validate_connection(): # Optional: re-validate before each call
+            #     raise LLMConnectionError("Cannot connect to Gemini API or model not available")
                 
-            response = self.send_prompt(prompt, max_tokens, temperature)
-            response_content = self.process_response(response)
+            response_object = self.send_prompt(prompt, max_tokens, temperature)
+            response_content = self.process_response(response_object)
             
             return {
                 "success": True,
@@ -562,7 +588,7 @@ class GeminiClient(BaseLLM):
                 "error_type": e.__class__.__name__
             }
         except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
+            logger.error(f"Unexpected error during generation: {str(e)}")
             return {
                 "success": False,
                 "error": str(e),
