@@ -59,7 +59,7 @@ To determine if the code is vulnerable to IDOR, analyze whether it allows unauth
     - Lack of Server-Side Authorization Validation
 
 ---------------------------------------------------------------------------------------------
-INITIAL ANALYSIS
+ANALYSIS
 
 Analyze the code in <file_code> tags for potential remotely exploitable vulnerabilities:
 1. Identify all remote user input entry points (e.g., API endpoints, form submissions). If not available, request the necessary context in the <lines of code>.
