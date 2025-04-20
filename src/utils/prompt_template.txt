@@ -3,8 +3,6 @@
 Objective:
 You are a top Java security expert. Your job is to analyze and verify the vulnerable lines of code that include source and sink points influenced by user input, and identify vulnerabilities — especially remotely exploitable IDOR vulnerabilities.
 
-In addition to IDOR, the code belongs to the Damn Vulnerable Java Application (DVJA), which includes insecure code corresponding to the OWASP Top 10 2021 vulnerabilities:
-
 A1 - Broken Access Control
 A2 - Cryptographic Failures
 A3 - Injection
