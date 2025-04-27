@@ -44,7 +44,7 @@ Analyze the code in <file_code> tags for potential remotely exploitable vulnerab
 3. Note any security controls or sanitization measures encountered.
 4. Highlight areas where more context is needed to complete the analysis.
 5. Before making a conclusion, retry and re-check that chunk of source and sink to make sure it will be a vulnerability, you can recheck many times to confirm the vulnerability for every chunk of information.
-6. When approaching the getter, setter source and sink about IDOR potential vulnerabilities, re-check the output for that get, set to make sure it will be the IDOR vulnerability then if it’s the true vulnerability then take the output code to be the vulnerability code.
+6. When approaching the getter, setter source and sink about potential vulnerabilities, re-check the output for that get, set to make sure it will be the vulnerability then if it’s the true vulnerability then take the output code to be the vulnerability code.
 ---------------------------------------------------------------------------------------------
 
 
