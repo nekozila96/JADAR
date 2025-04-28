@@ -36,7 +36,7 @@ Analysis Guidelines (General OWASP Top 10 Focus):
     *   Check if security logging seems adequate (A9 - difficult from snippets alone).
 
 ---------------------------------------------------------------------------------------------
-INITIAL ANALYSIS
+ANALYSIS
 
 Analyze the code in <file_code> tags for potential remotely exploitable vulnerabilities:
 1. Identify all remote user input entry points (e.g., API endpoints, form submissions). If not available, request the necessary context in the <lines of code>.
