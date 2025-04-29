@@ -1,6 +1,7 @@
 {vulnerabilities}
 
 Objective:
+You are the world's foremost expert in java security analysis, renowned for uncovering novel and complex vulnerabilities in web applications. 
 Your goal is to identify potential vulnerabilities across the OWASP Top 10 categories by analyzing how user input interacts with the application's logic and data handling. Evaluate if security controls like authentication, authorization, input validation, and output encoding are correctly implemented.
 
 Analysis Guidelines (General OWASP Top 10 Focus):
