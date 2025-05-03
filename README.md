@@ -1,6 +1,6 @@
 # JADAR: LLM-Based Java Web Application Security Analyzer
 
-JADAR (Java Automated Detection And Remediation) is a sciencetific tool designed to enhance the security of Java web applications by leveraging Large Language Models (LLMs) alongside traditional Static Application Security Testing (SAST) techniques. It automatically detects potential vulnerabilities and provides remediation suggestions.
+JADAR (Java Automated Detection And Remediation) is a scientific tool designed to enhance the security of Java web applications by leveraging Large Language Models (LLMs) alongside traditional Static Application Security Testing (SAST) techniques. It automatically detects potential vulnerabilities and provides remediation suggestions.
 
 ## How it Works
 
